@@ -1,0 +1,26 @@
+# Beszel Agent — רץ על כל אחד מ-3 השרתים
+# ---------------------------------------
+# אוסף CPU / זיכרון / דיסק / רשת ושולח ל-Hub.
+#
+# 1. ב-Hub לוחצים "Add System" -> מעתיקים את ה-PUBLIC KEY שמוצג.
+# 2. מדביקים אותו בשדה KEY למטה (או מגדירים משתנה סביבה BESZEL_KEY).
+# 3. הפעלה:  KEY='<המפתח>' docker compose -f docker-compose.agent.yml up -d
+#
+# ה-TOKEN נדרש בגרסאות החדשות לרישום אוטומטי; גם אותו מקבלים ממסך "Add System".
+
+services:
+  beszel-agent:
+    image: henrygd/beszel-agent:latest
+    container_name: beszel-agent
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./beszel_agent_data:/var/lib/beszel-agent
+      # רשות: ניטור קונטיינרים של docker שרצים על השרת
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      LISTEN: 45876
+      KEY: "${KEY}"
+      TOKEN: "${TOKEN}"
+      # ה-URL של ה-Hub (אותו host:port של הדשבורד)
+      HUB_URL: "${HUB_URL}"
