@@ -208,6 +208,21 @@ export const api = {
       body: JSON.stringify({ category, applyToMerchant }),
     }),
 
+  // Manual receipt attachments
+  listAttachments: (txnId: string) =>
+    req<{ attachments: Array<{ id: string; filename: string; mimeType: string; size: number; createdAt: string }> }>(
+      `/api/transactions/${txnId}/attachments`,
+    ),
+  uploadAttachment: async (txnId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`/api/transactions/${txnId}/attachments`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Upload failed');
+    return res.json() as Promise<{ id: string; filename: string; mimeType: string; size: number }>;
+  },
+  deleteAttachment: (attId: string) => req(`/api/attachments/${attId}`, { method: 'DELETE' }),
+  attachmentFileUrl: (attId: string) => `/api/attachments/file/${attId}`,
+
   // Categories & rules
   categories: () => req<{ categories: Category[] }>('/api/categories'),
   addCategory: (name: string, color?: string) =>

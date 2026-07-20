@@ -102,6 +102,19 @@ CREATE TABLE IF NOT EXISTS settings (
   value TEXT NOT NULL
 );
 
+-- Manually-attached receipts (photos / PDFs) linked to a transaction.
+-- Files live on disk under the attachments dir; this table holds the metadata.
+CREATE TABLE IF NOT EXISTS attachments (
+  id             TEXT PRIMARY KEY,
+  transaction_id TEXT REFERENCES transactions(id) ON DELETE CASCADE,
+  filename       TEXT NOT NULL,
+  mime_type      TEXT NOT NULL,
+  size           INTEGER NOT NULL,
+  path           TEXT NOT NULL,           -- absolute path on disk
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_att_txn ON attachments(transaction_id);
+
 -- OAuth / IMAP tokens, optionally encrypted at rest.
 CREATE TABLE IF NOT EXISTS oauth_tokens (
   provider   TEXT PRIMARY KEY,            -- 'gmail'

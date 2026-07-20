@@ -78,6 +78,8 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ confirm: z.literal('DELETE') }).parse(req.body);
     void body;
     const db = getDb();
+    const { wipeAttachments } = await import('../repo/attachments.js');
+    wipeAttachments();
     const tx = db.transaction(() => {
       db.prepare('DELETE FROM double_charge_alerts').run();
       db.prepare('DELETE FROM transactions').run();

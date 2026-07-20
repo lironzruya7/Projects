@@ -235,7 +235,9 @@ RTL directional marks, DD/MM/YYYY dates, and trailing summary rows.
 
 ## Data & privacy
 
-- All data stays in a local SQLite file — **no cloud sync**.
+- All data stays in a local SQLite file — **no cloud sync**. Manually-attached
+  receipt photos/PDFs are stored on disk next to it under `data/attachments/`
+  (tiny — receipts are ~20–150 KB each).
 - OAuth tokens are stored locally, encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
 - Outbound calls are limited to Gmail (read-only) and, if enabled, the Anthropic API —
   both explicit and disableable.

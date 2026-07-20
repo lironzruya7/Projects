@@ -29,6 +29,8 @@ export const config = {
   production: envStr('NODE_ENV') === 'production',
   webDist: resolve(repoRoot, 'packages/web/dist'),
   databasePath: resolve(repoRoot, envStr('DATABASE_PATH', './data/finance.sqlite')),
+  // Manually-attached receipts are stored here (next to the DB file).
+  attachmentsDir: resolve(dirname(resolve(repoRoot, envStr('DATABASE_PATH', './data/finance.sqlite'))), 'attachments'),
   defaultCurrency: envStr('DEFAULT_CURRENCY', 'ILS'),
   tokenEncryptionKey: envStr('TOKEN_ENCRYPTION_KEY'),
   gmail: {

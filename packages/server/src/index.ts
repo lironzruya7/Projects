@@ -14,6 +14,7 @@ import { dashboardRoutes } from './routes/dashboard.js';
 import { emailRoutes } from './routes/email.js';
 import { llmRoutes } from './routes/llm.js';
 import { settingsRoutes } from './routes/settings.js';
+import { attachmentRoutes } from './routes/attachments.js';
 
 async function main(): Promise<void> {
   // Initialize DB (creates file + schema + seed) before serving.
@@ -34,6 +35,7 @@ async function main(): Promise<void> {
   await app.register(emailRoutes);
   await app.register(llmRoutes);
   await app.register(settingsRoutes);
+  await app.register(attachmentRoutes);
 
   // Production: serve the built frontend from this same origin, so there is a
   // single port to expose (e.g. over Tailscale). Falls back to index.html for

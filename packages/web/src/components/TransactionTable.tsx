@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { Category, LedgerEntry } from '../api/client';
 import { api } from '../api/client';
 import { formatDate, formatMoney } from '../lib/format';
@@ -38,6 +38,7 @@ export function TransactionTable({
 }): JSX.Element {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  const [receiptsFor, setReceiptsFor] = useState<string | null>(null);
 
   if (entries.length === 0) {
     return <div className="text-muted text-sm py-8 text-center">No transactions match.</div>;
@@ -71,6 +72,13 @@ export function TransactionTable({
                       📄
                     </a>
                   )}
+                  <button
+                    className={`text-xs shrink-0 ${receiptsFor === e.id ? 'text-brand' : 'text-muted'}`}
+                    title="Receipts"
+                    onClick={() => setReceiptsFor(receiptsFor === e.id ? null : e.id)}
+                  >
+                    📎
+                  </button>
                 </div>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="text-muted text-xs">{formatDate(e.date)}</span>
@@ -138,9 +146,108 @@ export function TransactionTable({
                 ))}
               </div>
             )}
+
+            {receiptsFor === e.id && <ReceiptsPanel txnId={e.id} />}
           </Fragment>
         );
       })}
+    </div>
+  );
+}
+
+/** Attach / view manual receipt photos & PDFs for a transaction. */
+function ReceiptsPanel({ txnId }: { txnId: string }): JSX.Element {
+  const [items, setItems] = useState<Array<{ id: string; filename: string; mimeType: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function load(): Promise<void> {
+    setLoading(true);
+    try {
+      const r = await api.listAttachments(txnId);
+      setItems(r.attachments);
+    } finally {
+      setLoading(false);
+    }
+  }
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [txnId]);
+
+  async function upload(file: File | undefined): Promise<void> {
+    if (!file) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.uploadAttachment(txnId, file);
+      await load();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="bg-panel2/30 rounded-lg px-3 py-2 mb-2">
+      <div className="text-xs text-muted mb-2">Receipts</div>
+      {err && <div className="text-rose-400 text-xs mb-2">{err}</div>}
+      {loading ? (
+        <div className="text-muted text-xs">Loading…</div>
+      ) : (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {items.map((a) => (
+            <div key={a.id} className="relative">
+              <a href={api.attachmentFileUrl(a.id)} target="_blank" rel="noreferrer" title={a.filename}>
+                {a.mimeType.startsWith('image/') ? (
+                  <img src={api.attachmentFileUrl(a.id)} className="w-16 h-16 object-cover rounded-lg border border-edge" />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg border border-edge flex items-center justify-center text-2xl">📄</div>
+                )}
+              </a>
+              <button
+                className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white rounded-full w-5 h-5 text-xs leading-none"
+                title="Delete receipt"
+                onClick={async () => {
+                  await api.deleteAttachment(a.id);
+                  await load();
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          {items.length === 0 && <div className="text-muted text-xs self-center">No receipts yet.</div>}
+        </div>
+      )}
+
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => upload(e.target.files?.[0])}
+      />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*,application/pdf"
+        className="hidden"
+        onChange={(e) => upload(e.target.files?.[0])}
+      />
+      <div className="flex gap-2">
+        <Button variant="subtle" disabled={busy} onClick={() => cameraRef.current?.click()}>
+          📷 Take photo
+        </Button>
+        <Button variant="ghost" disabled={busy} onClick={() => fileRef.current?.click()}>
+          📎 Upload file
+        </Button>
+      </div>
     </div>
   );
 }
