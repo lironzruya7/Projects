@@ -17,6 +17,16 @@ import { settingsRoutes } from './routes/settings.js';
 import { attachmentRoutes } from './routes/attachments.js';
 
 async function main(): Promise<void> {
+  // Safety net: some libraries (tesseract.js OCR) can throw asynchronously from
+  // a worker in a way per-call try/catch can't catch. For a local single-user
+  // app, log and keep serving rather than letting one bad receipt crash it.
+  process.on('uncaughtException', (err) => {
+    console.error('[uncaughtException]', err instanceof Error ? err.message : err);
+  });
+  process.on('unhandledRejection', (err) => {
+    console.error('[unhandledRejection]', err instanceof Error ? err.message : err);
+  });
+
   // Initialize DB (creates file + schema + seed) before serving.
   getDb();
 

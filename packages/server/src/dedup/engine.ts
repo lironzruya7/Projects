@@ -61,21 +61,44 @@ function findCandidates(txns: Transaction[], cfg: DedupSettings): Candidate[] {
           toleranceMinor: cfg.amountToleranceMinor,
         }))
           continue;
-        if (daysBetween(t.date, other.date) > cfg.dateWindowDays) continue;
-        const sim = tokenSetRatio(t.merchantNormalized, other.merchantNormalized);
-        if (sim < cfg.merchantThreshold) continue;
 
-        candidates.push({ a: t, b: other, similarity: sim, sameSource: isSameSource(t, other) });
+        const sim = tokenSetRatio(t.merchantNormalized, other.merchantNormalized);
+        const days = daysBetween(t.date, other.date);
+
+        // Strong signal: same transaction/invoice number + matching amount. The
+        // billing date can differ from the purchase date, so allow a wider window
+        // and don't require the merchant strings to match.
+        const sameRef = sameExternalId(t.externalId, other.externalId);
+        const strong = sameRef && days <= Math.max(cfg.dateWindowDays, 14);
+
+        // Normal signal: amount + date window + fuzzy merchant.
+        const normal = days <= cfg.dateWindowDays && sim >= cfg.merchantThreshold;
+
+        if (!strong && !normal) continue;
+
+        candidates.push({
+          a: t,
+          b: other,
+          similarity: sameRef ? Math.max(sim, 0.99) : sim,
+          sameSource: isSameSource(t, other),
+        });
       }
     }
   }
   return candidates;
 }
 
+/** Two invoice/transaction numbers refer to the same charge (digits compared). */
+function sameExternalId(a: string | null, b: string | null): boolean {
+  const na = (a ?? '').replace(/\D/g, '');
+  const nb = (b ?? '').replace(/\D/g, '');
+  return na.length >= 4 && na === nb;
+}
+
 /** Priority for choosing the primary of a merge group. Lower = preferred. */
 function primaryRank(t: Transaction): number {
-  const order: Record<string, number> = { bank: 0, card: 1, email: 2 };
-  return order[t.sourceType] ?? 3;
+  const order: Record<string, number> = { bank: 0, card: 1, email: 2, receipt: 3 };
+  return order[t.sourceType] ?? 4;
 }
 
 export interface DedupResult {
@@ -194,8 +217,8 @@ export function mergeManual(ids: string[]): string | null {
     .filter(Boolean) as Array<{ id: string; source_type: string; created_at: string }>;
   if (rows.length < 2) return null;
   rows.sort((a, b) => {
-    const order: Record<string, number> = { bank: 0, card: 1, email: 2 };
-    return (order[a.source_type] ?? 3) - (order[b.source_type] ?? 3) || a.created_at.localeCompare(b.created_at);
+    const order: Record<string, number> = { bank: 0, card: 1, email: 2, receipt: 3 };
+    return (order[a.source_type] ?? 4) - (order[b.source_type] ?? 4) || a.created_at.localeCompare(b.created_at);
   });
   const primary = rows[0]!;
   const tx = db.transaction(() => {

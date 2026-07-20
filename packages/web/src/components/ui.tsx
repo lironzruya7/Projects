@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { hasHebrew } from '../lib/format';
 
 /** Render text with correct direction for Hebrew/RTL even inside an LTR layout. */
@@ -14,13 +14,15 @@ export function Card({
   children,
   className = '',
   onClick,
+  style,
 }: {
   children: ReactNode;
   className?: string;
   onClick?: () => void;
+  style?: CSSProperties;
 }): JSX.Element {
   return (
-    <div className={`bg-panel border border-edge rounded-xl p-4 ${className}`} onClick={onClick}>
+    <div className={`bg-panel border border-edge rounded-xl p-4 ${className}`} onClick={onClick} style={style}>
       {children}
     </div>
   );

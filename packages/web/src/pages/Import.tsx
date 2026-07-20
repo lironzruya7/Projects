@@ -27,6 +27,10 @@ export function ImportPage(): JSX.Element {
   const [confirmClear, setConfirmClear] = useState<'email' | 'bank' | 'card' | null>(null);
   const [historyMsg, setHistoryMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const receiptCamRef = useRef<HTMLInputElement>(null);
+  const receiptFileRef = useRef<HTMLInputElement>(null);
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanMsg, setScanMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Mapping form state
   const [mapping, setMapping] = useState<ColumnMapping>({});
@@ -97,6 +101,27 @@ export function ImportPage(): JSX.Element {
     }
   }
 
+  async function scanReceipt(file: File | undefined): Promise<void> {
+    if (!file) return;
+    setScanBusy(true);
+    setScanMsg(null);
+    try {
+      const r = await api.scanReceipt(file);
+      const amt = r.extracted.amount ?? 0;
+      const cur = r.extracted.currency || 'ILS';
+      const merged = r.merged ? ' · matched an existing charge and merged ✓' : '';
+      setScanMsg({
+        ok: true,
+        text: `Added ${r.extracted.merchant ?? 'receipt'} — ${cur} ${amt.toFixed(2)}${r.extracted.date ? ` on ${r.extracted.date}` : ''}${merged}`,
+      });
+      await loadBatches();
+    } catch (e) {
+      setScanMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setScanBusy(false);
+    }
+  }
+
   const header = state?.preview.header ?? [];
   const colOptions = ['', ...header];
 
@@ -107,6 +132,31 @@ export function ImportPage(): JSX.Element {
         Upload a CSV or XLSX. Columns are auto-detected for Bank Yahav, Isracard, and Cal — adjust the mapping if
         needed. The mapping is remembered per file format, so re-imports are one click.
       </p>
+
+      {/* Scan a receipt with the camera → OCR → auto-added & deduped */}
+      <Card style={{ background: 'linear-gradient(135deg, #4ade8018, transparent 60%)' }}>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <h3 className="font-medium">📷 Scan a receipt</h3>
+          <span className="text-xs text-muted">OCR → auto-added</span>
+        </div>
+        <p className="text-xs text-muted mb-3">
+          Photograph a paper receipt (or pick a PDF). It's read automatically, added to your ledger, and matched
+          against the card/email charge if one exists.
+        </p>
+        <input ref={receiptCamRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => scanReceipt(e.target.files?.[0])} />
+        <input ref={receiptFileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => scanReceipt(e.target.files?.[0])} />
+        <div className="flex gap-2">
+          <Button disabled={scanBusy} onClick={() => receiptCamRef.current?.click()}>
+            {scanBusy ? 'Reading…' : '📷 Take photo'}
+          </Button>
+          <Button variant="ghost" disabled={scanBusy} onClick={() => receiptFileRef.current?.click()}>
+            📎 Pick file
+          </Button>
+        </div>
+        {scanMsg && (
+          <div className={`text-sm mt-3 ${scanMsg.ok ? 'text-emerald-400' : 'text-rose-400'}`}>{scanMsg.text}</div>
+        )}
+      </Card>
 
       {error && <Card className="border-rose-500/40"><div className="text-rose-400 text-sm">{error}</div></Card>}
 

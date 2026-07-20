@@ -1,8 +1,7 @@
 import { getDb, getSetting } from '../db/db.js';
 import { ParsedTransaction } from '../models/types.js';
-import { extractPdfText } from '../parsers/pdf.js';
-import { ocrImage, ocrPdf } from '../parsers/ocr.js';
 import { extractReceipt } from '../parsers/receipt.js';
+import { receiptTextFromFile } from '../parsers/receiptFile.js';
 import { createBatch, deleteBatch, setBatchRowCount } from '../repo/batches.js';
 import { insertParsed } from '../repo/transactions.js';
 import { gmailProvider } from './gmail.js';
@@ -41,22 +40,7 @@ function domainOf(email: string): string {
   return at >= 0 ? email.slice(at + 1) : email;
 }
 
-const IMAGE_MIME = /image\/(png|jpe?g|gif|webp|bmp|tiff)/i;
-
-async function textFromAttachment(mime: string, filename: string, data: Buffer): Promise<string> {
-  const lower = filename.toLowerCase();
-  if (mime.includes('pdf') || lower.endsWith('.pdf')) {
-    const t = await extractPdfText(data);
-    if (t.trim().length > 20) return t;
-    // Scanned PDF with no text layer -> render pages to images and OCR them.
-    const ocred = await ocrPdf(data);
-    return ocred.trim().length > 0 ? ocred : t;
-  }
-  if (IMAGE_MIME.test(mime) || /\.(png|jpe?g|gif|webp|bmp|tiff)$/i.test(lower)) {
-    return ocrImage(data);
-  }
-  return '';
-}
+const textFromAttachment = receiptTextFromFile;
 
 /** Convert one email (+ attachments) into candidate transactions. */
 async function messageToTransactions(msg: EmailMessage, provider: string): Promise<ParsedTransaction[]> {

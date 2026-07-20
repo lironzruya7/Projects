@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const SourceType = z.enum(['email', 'bank', 'card']);
+export const SourceType = z.enum(['email', 'bank', 'card', 'receipt']);
 export type SourceType = z.infer<typeof SourceType>;
 
 export const CategorySource = z.enum(['rule', 'manual', 'llm', 'none']);

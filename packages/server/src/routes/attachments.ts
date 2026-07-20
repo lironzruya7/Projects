@@ -1,9 +1,56 @@
 import { readFileSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
+import { runDedup } from '../dedup/engine.js';
+import { ParsedTransaction } from '../models/types.js';
+import { extractReceipt } from '../parsers/receipt.js';
+import { receiptTextFromFile } from '../parsers/receiptFile.js';
 import { deleteAttachment, getAttachment, listAttachments, saveAttachment } from '../repo/attachments.js';
-import { getTransaction } from '../repo/transactions.js';
+import { createBatch, setBatchRowCount } from '../repo/batches.js';
+import { getTransaction, insertParsed } from '../repo/transactions.js';
 
 export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
+  // Scan a receipt photo/PDF: OCR it, extract the fields, create a transaction
+  // automatically, attach the image to it, and run duplicate detection so it
+  // merges with the matching card/email charge on its own.
+  app.post('/api/receipts', async (req, reply) => {
+    const file = await req.file();
+    if (!file) return reply.code(400).send({ error: 'No file uploaded' });
+    const data = await file.toBuffer();
+    if (data.length === 0) return reply.code(400).send({ error: 'Empty file' });
+
+    const text = await receiptTextFromFile(file.mimetype, file.filename, data);
+    const extracted = extractReceipt(text);
+    if (!extracted.amount || extracted.amount <= 0) {
+      return reply.code(422).send({
+        error: 'Could not read an amount from this receipt. Try a clearer photo, or add it manually.',
+        extracted,
+      });
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const parsed = ParsedTransaction.parse({
+      date: extracted.date ?? today,
+      amount: -Math.abs(extracted.amount),
+      currency: extracted.currency,
+      merchantRaw: extracted.merchant ?? 'Receipt',
+      description: 'Scanned receipt',
+      sourceType: 'receipt',
+      sourceProvider: 'photo',
+      sourceRef: `receipt:${file.filename}:${Date.now()}`,
+      externalId: extracted.invoiceNumber ?? null,
+      rawAmount: String(extracted.amount),
+      raw: { lineItems: extracted.lineItems },
+    });
+
+    const batchId = createBatch({ sourceType: 'receipt', sourceProvider: 'photo', filename: file.filename, note: 'Scanned receipt' });
+    const [txnId] = insertParsed([parsed], batchId);
+    setBatchRowCount(batchId, 1);
+    if (txnId) saveAttachment({ transactionId: txnId, filename: file.filename, mimeType: file.mimetype, data });
+
+    const dedup = runDedup();
+    return { transactionId: txnId, extracted, dedup, merged: dedup.mergedRows > 0 };
+  });
+
   // Upload a receipt photo/PDF for a transaction (multipart).
   app.post('/api/transactions/:id/attachments', async (req, reply) => {
     const { id } = req.params as { id: string };

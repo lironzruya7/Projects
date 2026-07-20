@@ -1,4 +1,4 @@
-export type SourceType = 'email' | 'bank' | 'card';
+export type SourceType = 'email' | 'bank' | 'card' | 'receipt';
 
 export interface Transaction {
   id: string;
@@ -222,6 +222,20 @@ export const api = {
   },
   deleteAttachment: (attId: string) => req(`/api/attachments/${attId}`, { method: 'DELETE' }),
   attachmentFileUrl: (attId: string) => `/api/attachments/file/${attId}`,
+  // OCR a receipt photo/PDF and auto-create a (deduped) transaction from it.
+  scanReceipt: async (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/api/receipts', { method: 'POST', body: fd });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error ?? 'Could not scan receipt');
+    return body as {
+      transactionId: string;
+      extracted: { merchant: string | null; date: string | null; amount: number | null; currency: string; invoiceNumber: string | null };
+      dedup: { merges: number; mergedRows: number; alerts: number };
+      merged: boolean;
+    };
+  },
 
   // Categories & rules
   categories: () => req<{ categories: Category[] }>('/api/categories'),

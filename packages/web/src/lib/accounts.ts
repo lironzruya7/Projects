@@ -9,6 +9,7 @@ const LABELS: Record<string, string> = {
   gmail: 'Gmail',
   outlook: 'Outlook',
   imap: 'Email',
+  photo: 'Receipt',
 };
 
 const COLORS: Record<string, string> = {
@@ -20,10 +21,11 @@ const COLORS: Record<string, string> = {
   gmail: '#fb7185',
   outlook: '#60a5fa',
   imap: '#fbbf24',
+  photo: '#4ade80',
 };
 
-const SOURCE_LABEL: Record<string, string> = { bank: 'Bank', card: 'Card', email: 'Email' };
-const SOURCE_COLOR: Record<string, string> = { bank: '#38bdf8', card: '#c084fc', email: '#fbbf24' };
+const SOURCE_LABEL: Record<string, string> = { bank: 'Bank', card: 'Card', email: 'Email', receipt: 'Receipt' };
+const SOURCE_COLOR: Record<string, string> = { bank: '#38bdf8', card: '#c084fc', email: '#fbbf24', receipt: '#4ade80' };
 
 function hash(s: string): number {
   let h = 0;

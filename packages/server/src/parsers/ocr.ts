@@ -10,6 +10,14 @@ import { join } from 'node:path';
  * of the import still succeeds.
  */
 export async function ocrImage(buf: Buffer): Promise<string> {
+  // tesseract.js can throw asynchronously (e.g. it fails to fetch its language
+  // data) in a way a try/catch here can't catch, so cap the whole thing with a
+  // timeout. A global handler in index.ts keeps that async throw from crashing
+  // the server; here we just return '' so the caller treats it as "no text".
+  return withTimeout(runOcr(buf), 60_000);
+}
+
+async function runOcr(buf: Buffer): Promise<string> {
   try {
     const { createWorker } = await import('tesseract.js');
     const worker = await createWorker('heb+eng');
@@ -17,12 +25,19 @@ export async function ocrImage(buf: Buffer): Promise<string> {
       const { data } = await worker.recognize(buf);
       return data.text ?? '';
     } finally {
-      await worker.terminate();
+      await worker.terminate().catch(() => {});
     }
   } catch (err) {
     console.warn('[ocr] OCR unavailable:', (err as Error).message);
     return '';
   }
+}
+
+function withTimeout(p: Promise<string>, ms: number): Promise<string> {
+  return Promise.race([
+    p.catch(() => ''),
+    new Promise<string>((resolve) => setTimeout(() => resolve(''), ms)),
+  ]);
 }
 
 /**

@@ -92,6 +92,7 @@ export function Transactions(): JSX.Element {
             <option value="bank">Bank</option>
             <option value="card">Card</option>
             <option value="email">Email</option>
+            <option value="receipt">Receipt</option>
           </select>
           {accounts.some((a) => a.provider) && (
             <select
