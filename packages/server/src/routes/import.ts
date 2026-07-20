@@ -4,7 +4,7 @@ import { ColumnMapping, AmountMode } from '../models/types.js';
 import { applyMapping, buildPreview, fingerprint } from '../parsers/fileImport.js';
 import { readGrid } from '../parsers/tabular.js';
 import { getMapping, listMappings, saveMapping } from '../repo/mappings.js';
-import { createBatch, deleteBatch, listBatches, setBatchRowCount } from '../repo/batches.js';
+import { createBatch, deleteBatch, deleteBatchesBySource, listBatches, setBatchRowCount } from '../repo/batches.js';
 import { insertParsed } from '../repo/transactions.js';
 import { runDedup } from '../dedup/engine.js';
 import { getUpload, putUpload } from '../util/uploadCache.js';
@@ -92,6 +92,14 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
     deleteBatch(id);
     const dedup = runDedup();
     return { ok: true, dedup };
+  });
+
+  // Bulk-clear all imports of one source type (e.g. every email scan).
+  app.post('/api/import/clear', async (req) => {
+    const body = z.object({ sourceType: z.enum(['email', 'bank', 'card']) }).parse(req.body);
+    const deleted = deleteBatchesBySource(body.sourceType);
+    const dedup = runDedup();
+    return { ok: true, deleted, dedup };
   });
 
   app.get('/api/import/mappings', async () => ({ mappings: listMappings() }));

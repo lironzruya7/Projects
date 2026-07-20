@@ -180,6 +180,11 @@ export const api = {
     ),
   batches: () => req<{ batches: any[] }>('/api/import/batches'),
   deleteBatch: (id: string) => req(`/api/import/batches/${id}`, { method: 'DELETE' }),
+  clearBatches: (sourceType: 'email' | 'bank' | 'card') =>
+    req<{ ok: boolean; deleted: number }>('/api/import/clear', {
+      method: 'POST',
+      body: JSON.stringify({ sourceType }),
+    }),
   mappings: () => req<{ mappings: any[] }>('/api/import/mappings'),
 
   // Transactions

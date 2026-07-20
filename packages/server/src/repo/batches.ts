@@ -49,3 +49,9 @@ export function deleteBatch(id: string): void {
   // Cascade deletes its transactions (FK ON DELETE CASCADE).
   getDb().prepare(`DELETE FROM import_batches WHERE id = ?`).run(id);
 }
+
+/** Delete every batch of a given source type ('email' | 'bank' | 'card'). Returns count. */
+export function deleteBatchesBySource(sourceType: string): number {
+  const info = getDb().prepare(`DELETE FROM import_batches WHERE source_type = ?`).run(sourceType);
+  return info.changes;
+}

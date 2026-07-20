@@ -24,6 +24,8 @@ export function ImportPage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
   const [batches, setBatches] = useState<any[]>([]);
+  const [confirmClear, setConfirmClear] = useState<'email' | 'bank' | 'card' | null>(null);
+  const [historyMsg, setHistoryMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Mapping form state
@@ -250,7 +252,53 @@ export function ImportPage(): JSX.Element {
       )}
 
       <Card>
-        <h3 className="font-medium mb-3">Import history</h3>
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h3 className="font-medium">Import history</h3>
+          {batches.length > 0 && (
+            <div className="flex gap-2">
+              {(['email', 'bank', 'card'] as const).map((st) => {
+                const count = batches.filter((b) => b.source_type === st).length;
+                if (count === 0) return null;
+                return (
+                  <Button
+                    key={st}
+                    variant="ghost"
+                    onClick={() => setConfirmClear(st)}
+                    className={confirmClear === st ? 'border-rose-500 text-rose-300' : ''}
+                  >
+                    {confirmClear === st ? `Confirm delete ${count} ${st}?` : `Delete all ${st} (${count})`}
+                  </Button>
+                );
+              })}
+              {confirmClear && (
+                <Button
+                  variant="danger"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError(null);
+                    try {
+                      const r = await api.clearBatches(confirmClear);
+                      setHistoryMsg(`Deleted ${r.deleted} ${confirmClear} import(s) and their transactions.`);
+                      setConfirmClear(null);
+                      await loadBatches();
+                    } catch (e) {
+                      setError(`Delete failed: ${(e as Error).message}`);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  Yes, delete
+                </Button>
+              )}
+              {confirmClear && (
+                <Button variant="subtle" onClick={() => setConfirmClear(null)}>Cancel</Button>
+              )}
+            </div>
+          )}
+        </div>
+        {historyMsg && <div className="text-emerald-400 text-sm mb-2">{historyMsg}</div>}
         {batches.length === 0 ? (
           <div className="text-muted text-sm">No imports yet.</div>
         ) : (
@@ -266,10 +314,18 @@ export function ImportPage(): JSX.Element {
                 </div>
                 <Button
                   variant="ghost"
+                  disabled={busy}
                   onClick={async () => {
-                    if (confirm('Delete this import and its transactions?')) {
+                    setBusy(true);
+                    setError(null);
+                    try {
                       await api.deleteBatch(b.id);
+                      setHistoryMsg('Import deleted.');
                       await loadBatches();
+                    } catch (e) {
+                      setError(`Delete failed: ${(e as Error).message}`);
+                    } finally {
+                      setBusy(false);
                     }
                   }}
                 >
