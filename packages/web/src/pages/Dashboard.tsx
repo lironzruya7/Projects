@@ -18,7 +18,7 @@ import { Donut, type DonutDatum } from '../components/Donut';
 import { Bidi, Card, Spinner, StatCard } from '../components/ui';
 import { categoryColor } from '../lib/colors';
 import { accountColor, accountLabel } from '../lib/accounts';
-import { addMonths, formatMoney, formatMonth, formatMonthLong } from '../lib/format';
+import { addMonths, currencySymbol, formatMoney, formatMonth, formatMonthLong } from '../lib/format';
 
 const TOOLTIP_STYLE = { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, color: '#e2e8f0' };
 
@@ -26,14 +26,18 @@ export function Dashboard(): JSX.Element {
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [month, setMonth] = useState<string | undefined>(undefined);
+  const [curFilter, setCurFilter] = useState<string | undefined>(undefined);
   const nav = useNavigate();
 
   useEffect(() => {
+    const params: Record<string, string> = {};
+    if (month) params.month = month;
+    if (curFilter) params.currency = curFilter;
     api
-      .dashboard(month ? { month } : {})
+      .dashboard(params)
       .then(setData)
       .catch((e) => setError(e.message));
-  }, [month]);
+  }, [month, curFilter]);
 
   if (error) return <Card><div className="text-rose-400">Failed to load: {error}</div></Card>;
   if (!data) return <Spinner label="Building dashboard…" />;
@@ -82,6 +86,24 @@ export function Dashboard(): JSX.Element {
           </button>
         </div>
       </div>
+
+      {/* Currency switcher — only when more than one currency is present */}
+      {data.byCurrency.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted">Currency:</span>
+          {data.byCurrency.map((c) => (
+            <button
+              key={c.currency}
+              onClick={() => setCurFilter(c.currency)}
+              className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                data.activeCurrency === c.currency ? 'border-brand text-brand bg-brand/10' : 'border-edge text-muted'
+              }`}
+            >
+              {currencySymbol(c.currency)} {c.currency}
+            </button>
+          ))}
+        </div>
+      )}
 
       {empty && (
         <Card className="text-center py-10">
@@ -156,6 +178,33 @@ export function Dashboard(): JSX.Element {
           </div>
         )}
       </Card>
+
+      {/* Currency center — totals per currency, side by side */}
+      {data.byCurrency.length > 1 && (
+        <Card>
+          <h3 className="font-medium mb-3">By currency · {formatMonth(data.referenceMonth)}</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {data.byCurrency.map((c) => (
+              <button
+                key={c.currency}
+                onClick={() => nav(`/transactions?currency=${encodeURIComponent(c.currency)}`)}
+                className={`rounded-xl border p-3 text-left active:scale-[0.98] transition-transform ${
+                  data.activeCurrency === c.currency ? 'border-brand' : 'border-edge'
+                }`}
+              >
+                <div className="text-xs text-muted flex items-center justify-between">
+                  <span>{currencySymbol(c.currency)} {c.currency}</span>
+                  <span>{c.count} txns</span>
+                </div>
+                <div className="text-xl font-semibold mt-1">{formatMoney(c.expense, c.currency)}</div>
+                {c.income > 0 && (
+                  <div className="text-xs text-emerald-400 mt-0.5">+ {formatMoney(c.income, c.currency)} in</div>
+                )}
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Spending by account / card */}
       {data.byAccount.length > 0 && (

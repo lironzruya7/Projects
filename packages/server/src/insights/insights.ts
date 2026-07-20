@@ -22,6 +22,7 @@ export interface DashboardFilter {
   category?: string;
   sourceType?: SourceType;
   month?: string; // YYYY-MM; overrides the auto reference month
+  currency?: string; // restrict monetary aggregates to one currency
 }
 
 function applyFilter(txns: Transaction[], f: DashboardFilter): Transaction[] {
@@ -59,6 +60,8 @@ export interface DashboardSummary {
   topMerchants: Array<{ merchant: string; amount: number; count: number }>;
   cashFlow: Array<{ month: string; income: number; expense: number; net: number }>;
   byAccount: Array<{ provider: string | null; sourceType: string; amount: number; count: number }>;
+  byCurrency: Array<{ currency: string; expense: number; income: number; count: number }>;
+  activeCurrency: string;
   counts: { ledger: number; alerts: number };
   range: { min: string; max: string }; // earliest / latest month with data
 }
@@ -76,11 +79,31 @@ function monthRange(txns: Transaction[], fallback: string): { min: string; max: 
 }
 
 export function buildDashboard(filter: DashboardFilter = {}): DashboardSummary {
-  const currency = getSetting<string>('currency', 'ILS');
-  const all = applyFilter(allPrimary(), filter);
+  const base = getSetting<string>('currency', 'ILS');
+  // category/sourceType filtered, ALL currencies (needed for the currency center).
+  const allRaw = applyFilter(allPrimary(), filter);
   // Reference month: explicit selection (if it looks valid) else the newest month.
-  const ref = /^\d{4}-\d{2}$/.test(filter.month ?? '') ? filter.month! : referenceMonth(all);
-  const range = monthRange(all, ref);
+  const ref = /^\d{4}-\d{2}$/.test(filter.month ?? '') ? filter.month! : referenceMonth(allRaw);
+  const range = monthRange(allRaw, ref);
+
+  // Currency center: totals per currency for the reference month (before we
+  // narrow to one currency). Mixing currencies in a single sum is meaningless,
+  // so every other figure below is scoped to a single `activeCurrency`.
+  const curMap = new Map<string, { currency: string; expense: number; income: number; count: number }>();
+  for (const t of allRaw.filter((t) => monthKey(t.date) === ref)) {
+    const e = curMap.get(t.currency) ?? { currency: t.currency, expense: 0, income: 0, count: 0 };
+    if (isExpense(t)) e.expense += mag(t);
+    else if (isIncome(t)) e.income += mag(t);
+    e.count++;
+    curMap.set(t.currency, e);
+  }
+  const byCurrency = [...curMap.values()].sort((a, b) => b.expense - a.expense);
+  // Active currency: explicit choice, else base if present, else the busiest one.
+  const activeCurrency =
+    filter.currency || (byCurrency.some((c) => c.currency === base) ? base : byCurrency[0]?.currency ?? base);
+
+  const all = allRaw.filter((t) => t.currency === activeCurrency);
+  const currency = activeCurrency;
   const lastM = addMonths(ref, -1);
   const threeAgo = addMonths(ref, -2);
 
@@ -159,6 +182,8 @@ export function buildDashboard(filter: DashboardFilter = {}): DashboardSummary {
     topMerchants,
     cashFlow,
     byAccount,
+    byCurrency,
+    activeCurrency,
     counts: { ledger: all.length, alerts: openAlerts },
     range,
   };

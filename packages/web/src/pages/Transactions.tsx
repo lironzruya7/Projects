@@ -12,6 +12,7 @@ export function Transactions(): JSX.Element {
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [currencies, setCurrencies] = useState<Array<{ currency: string; count: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(params.get('search') ?? '');
 
@@ -19,6 +20,7 @@ export function Transactions(): JSX.Element {
     category: params.get('category') ?? undefined,
     sourceType: params.get('sourceType') ?? undefined,
     provider: params.get('provider') ?? undefined,
+    currency: params.get('currency') ?? undefined,
     merchant: params.get('merchant') ?? undefined,
     from: params.get('from') ?? undefined,
     to: params.get('to') ?? undefined,
@@ -28,10 +30,16 @@ export function Transactions(): JSX.Element {
 
   async function load(): Promise<void> {
     setLoading(true);
-    const [tx, cats, accs] = await Promise.all([api.transactions(filters), api.categories(), api.accounts()]);
+    const [tx, cats, accs, curs] = await Promise.all([
+      api.transactions(filters),
+      api.categories(),
+      api.accounts(),
+      api.currencies(),
+    ]);
     setEntries(tx.transactions);
     setCategories(cats.categories);
     setAccounts(accs.accounts);
+    setCurrencies(curs.currencies);
     setLoading(false);
   }
 
@@ -47,8 +55,12 @@ export function Transactions(): JSX.Element {
     setParams(next);
   }
 
-  const total = entries.reduce((s, e) => s + (e.amount < 0 ? Math.abs(e.amount) : 0), 0);
-  const income = entries.reduce((s, e) => s + (e.amount > 0 ? e.amount : 0), 0);
+  // Spend per currency (summing across currencies is meaningless).
+  const spendByCur = new Map<string, number>();
+  for (const e of entries) {
+    if (e.amount < 0) spendByCur.set(e.currency, (spendByCur.get(e.currency) ?? 0) + Math.abs(e.amount));
+  }
+  const spendParts = [...spendByCur.entries()].sort((a, b) => b[1] - a[1]).map(([c, v]) => formatMoney(v, c));
 
   const activeFilters = Object.entries(filters).filter(([, v]) => v);
 
@@ -57,7 +69,7 @@ export function Transactions(): JSX.Element {
       <div className="flex items-center justify-between gap-2">
         <h1 className="hidden md:block text-2xl font-semibold">Transactions</h1>
         <div className="text-xs sm:text-sm text-muted">
-          {entries.length} entries · spend {formatMoney(total)} · income {formatMoney(income)}
+          {entries.length} entries · spend {spendParts.length ? spendParts.join(' · ') : formatMoney(0)}
         </div>
       </div>
 
@@ -108,6 +120,20 @@ export function Transactions(): JSX.Element {
                     {accountLabel(a.provider, a.sourceType)} ({a.count})
                   </option>
                 ))}
+            </select>
+          )}
+          {currencies.length > 1 && (
+            <select
+              className="bg-panel2 border border-edge rounded-lg px-2 py-1.5 text-sm"
+              value={filters.currency ?? ''}
+              onChange={(e) => setFilter('currency', e.target.value || undefined)}
+            >
+              <option value="">All currencies</option>
+              {currencies.map((c) => (
+                <option key={c.currency} value={c.currency}>
+                  {c.currency} ({c.count})
+                </option>
+              ))}
             </select>
           )}
           {activeFilters.length > 0 && (

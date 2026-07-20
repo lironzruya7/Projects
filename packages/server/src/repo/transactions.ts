@@ -103,6 +103,7 @@ export interface LedgerQuery {
   category?: string;
   sourceType?: SourceType;
   provider?: string;
+  currency?: string;
   merchant?: string;
   search?: string;
   uncategorizedOnly?: boolean;
@@ -139,6 +140,10 @@ export function queryLedger(q: LedgerQuery): LedgerEntry[] {
   if (q.provider) {
     where.push('source_provider = @provider');
     params.provider = q.provider;
+  }
+  if (q.currency) {
+    where.push('currency = @currency');
+    params.currency = q.currency;
   }
   if (q.merchant) {
     where.push('merchant_normalized = @merchant');
@@ -239,6 +244,16 @@ export function listAccounts(): Array<{ provider: string | null; sourceType: str
        GROUP BY source_provider, source_type ORDER BY count DESC`,
     )
     .all() as Array<{ provider: string | null; sourceType: string; count: number }>;
+}
+
+/** Distinct currencies present in the ledger, with counts. */
+export function listCurrencies(): Array<{ currency: string; count: number }> {
+  return getDb()
+    .prepare(
+      `SELECT currency, COUNT(*) AS count FROM transactions WHERE merged_into IS NULL
+       GROUP BY currency ORDER BY count DESC`,
+    )
+    .all() as Array<{ currency: string; count: number }>;
 }
 
 export function uncategorizedMerchants(): string[] {
