@@ -154,6 +154,11 @@ The scope is `Mail.Read` (read-only) + `offline_access` (so the app can refresh 
 
 > OCR language data (`tesseract.js`) downloads on first use. If your environment blocks
 > that download, OCR is skipped gracefully and everything else still works.
+>
+> **Scanned PDFs:** a PDF with no text layer (a scanned image) is OCR'd by rendering its
+> pages to images first, which needs **poppler-utils** on the machine:
+> `sudo apt-get install poppler-utils` (provides `pdftoppm`). Optional — if it's missing,
+> scanned PDFs are skipped with a log line and text PDFs / images still work.
 
 ---
 

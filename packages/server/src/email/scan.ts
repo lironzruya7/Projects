@@ -1,7 +1,7 @@
 import { getDb, getSetting } from '../db/db.js';
 import { ParsedTransaction } from '../models/types.js';
 import { extractPdfText } from '../parsers/pdf.js';
-import { ocrImage } from '../parsers/ocr.js';
+import { ocrImage, ocrPdf } from '../parsers/ocr.js';
 import { extractReceipt } from '../parsers/receipt.js';
 import { createBatch, setBatchRowCount } from '../repo/batches.js';
 import { insertParsed } from '../repo/transactions.js';
@@ -48,8 +48,9 @@ async function textFromAttachment(mime: string, filename: string, data: Buffer):
   if (mime.includes('pdf') || lower.endsWith('.pdf')) {
     const t = await extractPdfText(data);
     if (t.trim().length > 20) return t;
-    // Scanned PDF with no text layer -> OCR is not applied to PDFs here; return what we have.
-    return t;
+    // Scanned PDF with no text layer -> render pages to images and OCR them.
+    const ocred = await ocrPdf(data);
+    return ocred.trim().length > 0 ? ocred : t;
   }
   if (IMAGE_MIME.test(mime) || /\.(png|jpe?g|gif|webp|bmp|tiff)$/i.test(lower)) {
     return ocrImage(data);
