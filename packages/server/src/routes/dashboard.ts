@@ -9,6 +9,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       .object({
         category: z.string().optional(),
         sourceType: z.enum(['email', 'bank', 'card']).optional(),
+        month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
       })
       .parse(req.query);
     return buildDashboard(q);

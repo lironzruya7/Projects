@@ -17,24 +17,31 @@ import { api } from '../api/client';
 import { Donut, type DonutDatum } from '../components/Donut';
 import { Bidi, Card, Spinner, StatCard } from '../components/ui';
 import { categoryColor } from '../lib/colors';
-import { formatMoney, formatMonth } from '../lib/format';
+import { addMonths, formatMoney, formatMonth, formatMonthLong } from '../lib/format';
 
 const TOOLTIP_STYLE = { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, color: '#e2e8f0' };
 
 export function Dashboard(): JSX.Element {
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [month, setMonth] = useState<string | undefined>(undefined);
   const nav = useNavigate();
 
   useEffect(() => {
-    api.dashboard().then(setData).catch((e) => setError(e.message));
-  }, []);
+    api
+      .dashboard(month ? { month } : {})
+      .then(setData)
+      .catch((e) => setError(e.message));
+  }, [month]);
 
   if (error) return <Card><div className="text-rose-400">Failed to load: {error}</div></Card>;
   if (!data) return <Spinner label="Building dashboard…" />;
 
   const { totals, currency } = data;
   const empty = data.counts.ledger === 0;
+  const cur = month ?? data.referenceMonth;
+  const canPrev = cur > data.range.min;
+  const canNext = cur < data.range.max;
   const goToMonth = () => nav(`/transactions?from=${data.referenceMonth}-01&to=${data.referenceMonth}-31`);
 
   const donutData: DonutDatum[] = data.categoryBreakdown.map((c) => ({
@@ -45,10 +52,33 @@ export function Dashboard(): JSX.Element {
 
   return (
     <div className="space-y-4">
-      <div className="hidden md:flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <div className="text-sm text-muted">
-          {data.counts.ledger} entries · {formatMonth(data.referenceMonth)}
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="hidden md:block text-2xl font-semibold">Dashboard</h1>
+        {/* Month picker */}
+        <div className="flex items-center gap-1 bg-panel border border-edge rounded-full px-1.5 py-1 ml-auto">
+          <button
+            className="w-8 h-8 rounded-full flex items-center justify-center text-lg disabled:opacity-30 active:bg-panel2"
+            disabled={!canPrev}
+            onClick={() => setMonth(addMonths(cur, -1))}
+            aria-label="Previous month"
+          >
+            ‹
+          </button>
+          <button
+            className="min-w-[7.5rem] text-center text-sm font-medium"
+            onClick={() => setMonth(undefined)}
+            title="Tap to jump to the latest month"
+          >
+            {formatMonthLong(cur)}
+          </button>
+          <button
+            className="w-8 h-8 rounded-full flex items-center justify-center text-lg disabled:opacity-30 active:bg-panel2"
+            disabled={!canNext}
+            onClick={() => setMonth(addMonths(cur, 1))}
+            aria-label="Next month"
+          >
+            ›
+          </button>
         </div>
       </div>
 

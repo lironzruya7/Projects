@@ -84,6 +84,7 @@ export interface DashboardSummary {
   topMerchants: Array<{ merchant: string; amount: number; count: number }>;
   cashFlow: Array<{ month: string; income: number; expense: number; net: number }>;
   counts: { ledger: number; alerts: number };
+  range: { min: string; max: string };
 }
 
 export interface RecurringItem {

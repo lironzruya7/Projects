@@ -18,6 +18,19 @@ export function formatMonth(ym: string): string {
   return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 }
 
+export function formatMonthLong(ym: string): string {
+  const [y, m] = ym.split('-');
+  const date = new Date(Number(y), Number(m) - 1, 1);
+  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+/** Shift a YYYY-MM month string by delta months. */
+export function addMonths(ym: string, delta: number): string {
+  const [y, m] = ym.split('-').map(Number) as [number, number];
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 export function formatDate(iso: string): string {
   if (!iso) return '';
   const [y, m, d] = iso.split('-');

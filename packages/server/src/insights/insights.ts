@@ -21,6 +21,7 @@ function mag(t: Transaction): number {
 export interface DashboardFilter {
   category?: string;
   sourceType?: SourceType;
+  month?: string; // YYYY-MM; overrides the auto reference month
 }
 
 function applyFilter(txns: Transaction[], f: DashboardFilter): Transaction[] {
@@ -58,12 +59,27 @@ export interface DashboardSummary {
   topMerchants: Array<{ merchant: string; amount: number; count: number }>;
   cashFlow: Array<{ month: string; income: number; expense: number; net: number }>;
   counts: { ledger: number; alerts: number };
+  range: { min: string; max: string }; // earliest / latest month with data
+}
+
+/** Earliest and latest month present in the ledger (for the month picker). */
+function monthRange(txns: Transaction[], fallback: string): { min: string; max: string } {
+  let min = '';
+  let max = '';
+  for (const t of txns) {
+    const m = monthKey(t.date);
+    if (!min || m < min) min = m;
+    if (!max || m > max) max = m;
+  }
+  return { min: min || fallback, max: max || fallback };
 }
 
 export function buildDashboard(filter: DashboardFilter = {}): DashboardSummary {
   const currency = getSetting<string>('currency', 'ILS');
   const all = applyFilter(allPrimary(), filter);
-  const ref = referenceMonth(all);
+  // Reference month: explicit selection (if it looks valid) else the newest month.
+  const ref = /^\d{4}-\d{2}$/.test(filter.month ?? '') ? filter.month! : referenceMonth(all);
+  const range = monthRange(all, ref);
   const lastM = addMonths(ref, -1);
   const threeAgo = addMonths(ref, -2);
 
@@ -131,6 +147,7 @@ export function buildDashboard(filter: DashboardFilter = {}): DashboardSummary {
     topMerchants,
     cashFlow,
     counts: { ledger: all.length, alerts: openAlerts },
+    range,
   };
 }
 
