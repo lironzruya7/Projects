@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { amountsMatch, parseAmount } from './amount.js';
 import { detectDateFormat, parseDate } from './date.js';
 import { normalizeMerchant, tokenSetRatio } from '../normalize/merchant.js';
+import { extractReceipt } from './receipt.js';
 
 test('parseAmount handles Israeli/European formats', () => {
   assert.equal(parseAmount('1,234.56'), 1234.56);
@@ -49,4 +50,18 @@ test('tokenSetRatio is order-insensitive and threshold-friendly', () => {
   assert.equal(tokenSetRatio('netflix com', 'netflix com'), 1);
   assert.ok(tokenSetRatio('wolt tel aviv', 'wolt') >= 0.85);
   assert.ok(tokenSetRatio('apple store', 'google play') < 0.5);
+});
+
+test('extractReceipt only accepts currency-anchored / total-line amounts', () => {
+  // Reference/order numbers must never become amounts.
+  assert.equal(
+    extractReceipt('החשבונית שלך\nmail.pdf_20260707_12641091_1059176178\nלקוח 2285921945').amount,
+    null,
+  );
+  assert.equal(extractReceipt('Order 20261725151005 confirmed').amount, null);
+  // Real amounts, currency-anchored or on a total line.
+  assert.equal(extractReceipt('סה"כ לתשלום ₪152.90').amount, 152.9);
+  assert.equal(extractReceipt('סך הכל 89.90 ₪').amount, 89.9);
+  assert.equal(extractReceipt('Total $5.00').amount, 5);
+  assert.equal(extractReceipt('Total due: 1,234.56').amount, 1234.56);
 });

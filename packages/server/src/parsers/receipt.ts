@@ -31,7 +31,7 @@ export function extractReceipt(rawText: string, hint?: { merchant?: string; date
     .filter((l) => l !== '');
 
   const currency = detectCurrency(text);
-  const amount = extractTotal(lines);
+  const amount = extractTotal(text, lines);
   const date = extractDate(text) ?? hint?.date ?? null;
   const invoiceNumber = extractInvoice(lines);
   const merchant = hint?.merchant ?? guessMerchant(lines);
@@ -48,32 +48,65 @@ function detectCurrency(text: string): string {
   return config.defaultCurrency;
 }
 
-function extractTotal(lines: string[]): number | null {
-  const candidates: number[] = [];
-  for (const line of lines) {
-    const lower = line.toLowerCase();
-    if (TOTAL_KEYWORDS.some((k) => lower.includes(k.toLowerCase()))) {
-      const nums = extractNumbers(line);
-      for (const n of nums) candidates.push(n);
-    }
-  }
-  if (candidates.length > 0) return Math.max(...candidates);
+// Personal receipts are essentially never below ₪0.5 or above ₪500k. Anything
+// outside this range is a reference/order/phone number, not a price.
+const MIN_AMOUNT = 0.5;
+const MAX_AMOUNT = 500_000;
 
-  // Fallback: the largest money-looking number anywhere.
-  const all: number[] = [];
-  for (const line of lines) all.push(...extractNumbers(line));
-  return all.length ? Math.max(...all) : null;
+// Currency markers used to "anchor" a number as real money.
+const CURRENCY_TOKEN = '₪|ש"?ח|שקל|\\bILS\\b|\\bNIS\\b|\\$|\\bUSD\\b|€|\\bEUR\\b|£|\\bGBP\\b';
+
+/** A numeric token that both parses and falls in the plausible money range. */
+function plausibleAmount(raw: string): number | null {
+  const n = parseAmount(raw);
+  if (n === null) return null;
+  const abs = Math.abs(n);
+  if (abs < MIN_AMOUNT || abs > MAX_AMOUNT) return null;
+  return abs;
 }
 
-function extractNumbers(line: string): number[] {
-  const matches = line.match(/-?[\d.,]+/g) ?? [];
-  const out: number[] = [];
-  for (const m of matches) {
-    if (!/\d/.test(m)) continue;
-    const n = parseAmount(m);
-    if (n !== null && Math.abs(n) >= 1) out.push(Math.abs(n));
+/** True if the token is written like money: has exactly two decimal places. */
+function looksLikeMoney(raw: string): boolean {
+  return /(?:^|[^\d])\d{1,3}(?:[.,]\d{3})*[.,]\d{2}(?!\d)/.test(raw) || /\d[.,]\d{2}(?!\d)/.test(raw);
+}
+
+/**
+ * Extract the total. Two reliable signals only — no "largest number anywhere"
+ * fallback (that grabbed invoice/reference numbers like 12641091 and produced
+ * absurd totals):
+ *   1. A number directly adjacent to a currency symbol (₪ 152.90 / 152.90 ₪).
+ *   2. A properly-formatted (two-decimal) number on a "total / לתשלום" line.
+ * Everything is bounded to a sane money range. If neither signal fires we return
+ * null so the caller skips the row rather than inventing an amount.
+ */
+function extractTotal(text: string, lines: string[]): number | null {
+  // 1. Currency-anchored amounts.
+  const anchored: number[] = [];
+  const re = new RegExp(`(?:${CURRENCY_TOKEN})\\s*(-?[\\d.,]+)|(-?[\\d.,]+)\\s*(?:${CURRENCY_TOKEN})`, 'gi');
+  for (const m of text.matchAll(re)) {
+    const numStr = m[1] ?? m[2];
+    const v = numStr ? plausibleAmount(numStr) : null;
+    if (v !== null) anchored.push(v);
   }
-  return out;
+
+  // 2. Two-decimal amounts on total-keyword lines.
+  const keyworded: number[] = [];
+  for (const line of lines) {
+    const lower = line.toLowerCase();
+    if (!TOTAL_KEYWORDS.some((k) => lower.includes(k.toLowerCase()))) continue;
+    for (const tok of line.match(/-?\d[\d.,]*/g) ?? []) {
+      if (!looksLikeMoney(tok)) continue;
+      const v = plausibleAmount(tok);
+      if (v !== null) keyworded.push(v);
+    }
+  }
+
+  // Prefer amounts that are BOTH on a total line and near a currency symbol;
+  // otherwise the keyworded ones; otherwise any currency-anchored amount.
+  const both = keyworded.filter((k) => anchored.includes(k));
+  const pool = both.length ? both : keyworded.length ? keyworded : anchored;
+  if (pool.length === 0) return null;
+  return Math.max(...pool);
 }
 
 function extractDate(text: string): string | null {
