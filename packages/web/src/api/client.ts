@@ -308,6 +308,28 @@ export const api = {
       method: 'POST',
     }),
 
+  // Direct bank/card connection (israeli-bank-scrapers)
+  scrapeProviders: () =>
+    req<{
+      encryptedAtRest: boolean;
+      providers: Array<{
+        key: string;
+        label: string;
+        sourceType: string;
+        fields: Array<{ key: string; label: string; type: 'text' | 'password' }>;
+        connected: boolean;
+      }>;
+    }>('/api/scrape/providers'),
+  saveScrapeCredentials: (provider: string, credentials: Record<string, string>) =>
+    req('/api/scrape/credentials', { method: 'POST', body: JSON.stringify({ provider, credentials }) }),
+  deleteScrapeCredentials: (provider: string) =>
+    req(`/api/scrape/credentials/${provider}`, { method: 'DELETE' }),
+  runScrape: (provider: string, months?: number) =>
+    req<{ accountsScanned: number; transactionsCreated: number; skippedExisting: number; fromDate: string }>(
+      '/api/scrape/run',
+      { method: 'POST', body: JSON.stringify({ provider, months }) },
+    ),
+
   // Settings / data
   settings: () => req<any>('/api/settings'),
   setCurrency: (currency: string) =>

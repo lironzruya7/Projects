@@ -169,6 +169,26 @@ The scope is `Mail.Read` (read-only) + `offline_access` (so the app can refresh 
 
 ---
 
+## Direct bank / card connection (optional)
+
+Pull transactions **straight from Bank Yahav / Isracard / Cal** — no CSV export — via
+[`israeli-bank-scrapers`](https://github.com/eshaham/israeli-bank-scrapers), which logs in
+with your credentials using a headless browser, locally. Scraped charges carry the
+transaction number, so they auto-merge with the email/receipt copies.
+
+1. **Set `TOKEN_ENCRYPTION_KEY`** in `.env` so your bank credentials are encrypted at rest.
+2. The scraper needs a Chromium. `npm install` downloads one automatically; on a small VPS
+   you may prefer a system one: `sudo apt-get install -y chromium-browser` then set
+   `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser`. On a fresh server you may also need
+   Chromium's shared libraries: `sudo apt-get install -y libnss3 libatk-bridge2.0-0 libgbm1 libasound2 libgtk-3-0`.
+3. In the app: **Settings → Direct connection** → **Connect** a provider → enter credentials
+   (Isracard: ID + last-6 card digits + password; Cal: username + password; Yahav: username +
+   national ID + password) → **Save** → **Sync now**.
+
+> Credentials never leave your machine. Some providers occasionally require a one-time code
+> (OTP/2FA); if a sync reports that, tell me and I'll add the interactive step. This uses the
+> banks' sites the way you would — it isn't an official API.
+
 ## Duplicate handling (the core logic)
 
 Two **distinct** cases, never conflated:

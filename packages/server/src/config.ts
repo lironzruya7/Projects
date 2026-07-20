@@ -36,6 +36,9 @@ export const config = {
   // Optional local directory of tesseract *.traineddata files. When set, OCR
   // runs fully offline (no CDN download). Leave empty to fetch on first use.
   tessdataPath: envStr('TESSDATA_PATH'),
+  // Optional Chromium path for the bank/card scraper. Leave empty to use the
+  // browser puppeteer installs automatically.
+  puppeteerExecutablePath: envStr('PUPPETEER_EXECUTABLE_PATH'),
   gmail: {
     clientId: envStr('GMAIL_CLIENT_ID'),
     clientSecret: envStr('GMAIL_CLIENT_SECRET'),

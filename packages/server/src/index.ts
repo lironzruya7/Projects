@@ -15,6 +15,7 @@ import { emailRoutes } from './routes/email.js';
 import { llmRoutes } from './routes/llm.js';
 import { settingsRoutes } from './routes/settings.js';
 import { attachmentRoutes } from './routes/attachments.js';
+import { scrapeRoutes } from './routes/scrape.js';
 
 async function main(): Promise<void> {
   // Safety net: some libraries (tesseract.js OCR) can throw asynchronously from
@@ -46,6 +47,7 @@ async function main(): Promise<void> {
   await app.register(llmRoutes);
   await app.register(settingsRoutes);
   await app.register(attachmentRoutes);
+  await app.register(scrapeRoutes);
 
   // Production: serve the built frontend from this same origin, so there is a
   // single port to expose (e.g. over Tailscale). Falls back to index.html for

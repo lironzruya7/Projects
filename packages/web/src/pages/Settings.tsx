@@ -118,6 +118,9 @@ export function Settings(): JSX.Element {
         </label>
       </Card>
 
+      {/* Direct bank/card connection */}
+      <DirectConnectCard />
+
       {/* Email scanning */}
       <Card>
         <div className="flex items-center justify-between mb-3">
@@ -287,6 +290,119 @@ export function Settings(): JSX.Element {
         <p className="text-xs text-muted mt-2">Everything is stored locally in a SQLite file. No cloud sync.</p>
       </Card>
     </div>
+  );
+}
+
+function DirectConnectCard(): JSX.Element {
+  const [data, setData] = useState<Awaited<ReturnType<typeof api.scrapeProviders>> | null>(null);
+  const [open, setOpen] = useState<string | null>(null);
+  const [creds, setCreds] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function load(): Promise<void> {
+    setData(await api.scrapeProviders());
+  }
+  useEffect(() => {
+    void load();
+  }, []);
+
+  if (!data) return <Card><Spinner label="Loading providers…" /></Card>;
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="font-medium">Direct connection (banks & cards)</h3>
+        {data.encryptedAtRest ? <Badge tone="good">encrypted</Badge> : <Badge tone="warn">set TOKEN_ENCRYPTION_KEY</Badge>}
+      </div>
+      <p className="text-xs text-muted mb-3">
+        Pull transactions straight from Bank Yahav / Isracard / Cal by logging in with your credentials (a headless
+        browser does it locally). Credentials stay on this machine{data.encryptedAtRest ? ', encrypted at rest' : ''}.
+      </p>
+      {msg && <div className={`text-sm mb-2 ${msg.ok ? 'text-emerald-400' : 'text-rose-400'}`}>{msg.text}</div>}
+
+      <div className="space-y-2">
+        {data.providers.map((p) => (
+          <div key={p.key} className="border border-edge rounded-lg p-3 bg-panel2/30">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium">{p.label}</span>
+              <div className="flex items-center gap-2">
+                {p.connected ? <Badge tone="good">saved</Badge> : <Badge>not set</Badge>}
+                {p.connected && (
+                  <Button
+                    variant="subtle"
+                    disabled={busy === p.key}
+                    onClick={async () => {
+                      setBusy(p.key);
+                      setMsg({ ok: true, text: `Syncing ${p.label}… this can take a minute (logging in).` });
+                      try {
+                        const r = await api.runScrape(p.key, 3);
+                        setMsg({ ok: true, text: `${p.label}: added ${r.transactionsCreated} txns · skipped ${r.skippedExisting} existing (since ${r.fromDate}).` });
+                      } catch (e) {
+                        setMsg({ ok: false, text: `${p.label}: ${(e as Error).message}` });
+                      } finally {
+                        setBusy(null);
+                      }
+                    }}
+                  >
+                    {busy === p.key ? 'Syncing…' : 'Sync now'}
+                  </Button>
+                )}
+                <Button variant="ghost" onClick={() => { setOpen(open === p.key ? null : p.key); setCreds({}); }}>
+                  {p.connected ? 'Update' : 'Connect'}
+                </Button>
+              </div>
+            </div>
+
+            {open === p.key && (
+              <div className="mt-3 space-y-2">
+                {p.fields.map((f) => (
+                  <label key={f.key} className="block">
+                    <span className="text-xs text-muted">{f.label}</span>
+                    <input
+                      className="input"
+                      type={f.type === 'password' ? 'password' : 'text'}
+                      autoComplete="off"
+                      value={creds[f.key] ?? ''}
+                      onChange={(e) => setCreds({ ...creds, [f.key]: e.target.value })}
+                    />
+                  </label>
+                ))}
+                <div className="flex gap-2">
+                  <Button
+                    onClick={async () => {
+                      try {
+                        await api.saveScrapeCredentials(p.key, creds);
+                        setOpen(null);
+                        setMsg({ ok: true, text: `${p.label} credentials saved. Click "Sync now".` });
+                        await load();
+                      } catch (e) {
+                        setMsg({ ok: false, text: (e as Error).message });
+                      }
+                    }}
+                  >
+                    Save
+                  </Button>
+                  {p.connected && (
+                    <Button
+                      variant="ghost"
+                      onClick={async () => {
+                        await api.deleteScrapeCredentials(p.key);
+                        setOpen(null);
+                        setMsg({ ok: true, text: `${p.label} credentials removed.` });
+                        await load();
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 

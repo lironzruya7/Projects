@@ -23,6 +23,7 @@
     "googleapis": "^173.0.0",
     "iconv-lite": "^0.6.3",
     "imapflow": "^1.0.171",
+    "israeli-bank-scrapers": "^6.8.0",
     "mailparser": "^3.7.2",
     "pdf-parse": "^1.1.1",
     "tesseract.js": "^5.1.1",
