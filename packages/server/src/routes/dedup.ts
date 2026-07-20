@@ -1,0 +1,49 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import {
+  listAlerts,
+  mergeManual,
+  resolveAlert,
+  runDedup,
+  unmerge,
+  unmergeAll,
+} from '../dedup/engine.js';
+
+export async function dedupRoutes(app: FastifyInstance): Promise<void> {
+  // Run detection across the whole ledger.
+  app.post('/api/dedup/run', async () => {
+    const result = runDedup();
+    return result;
+  });
+
+  // Rebuild from scratch: clear merges (keeps resolved alerts) then re-run.
+  app.post('/api/dedup/rebuild', async () => {
+    unmergeAll();
+    const result = runDedup();
+    return result;
+  });
+
+  app.get('/api/dedup/alerts', async (req) => {
+    const q = z.object({ status: z.string().optional() }).parse(req.query);
+    return { alerts: listAlerts(q.status) };
+  });
+
+  app.post('/api/dedup/alerts/:id/resolve', async (req) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({ status: z.enum(['confirmed', 'dismissed']) }).parse(req.body);
+    resolveAlert(id, body.status);
+    return { ok: true };
+  });
+
+  app.post('/api/dedup/merge', async (req) => {
+    const body = z.object({ ids: z.array(z.string()).min(2) }).parse(req.body);
+    const primary = mergeManual(body.ids);
+    return { ok: Boolean(primary), primary };
+  });
+
+  app.post('/api/dedup/unmerge', async (req) => {
+    const body = z.object({ id: z.string() }).parse(req.body);
+    unmerge(body.id);
+    return { ok: true };
+  });
+}

@@ -1,0 +1,24 @@
+{
+  "name": "finance-aggregator",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first personal finance aggregator: email + bank + card exports merged into one ledger with dedup, categorization, and insights.",
+  "workspaces": [
+    "packages/server",
+    "packages/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm -w @finance/server run dev",
+    "dev:web": "npm -w @finance/web run dev",
+    "build": "npm -w @finance/server run build && npm -w @finance/web run build",
+    "typecheck": "npm -w @finance/server run typecheck && npm -w @finance/web run typecheck",
+    "test": "npm -w @finance/server run test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
