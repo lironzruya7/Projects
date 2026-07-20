@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Category, CategoryRule } from '../api/client';
 import { api } from '../api/client';
 import { Badge, Bidi, Button, Card, Spinner } from '../components/ui';
+import { categoryColor } from '../lib/colors';
 
 export function Rules(): JSX.Element {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -53,16 +54,22 @@ export function Rules(): JSX.Element {
       <h1 className="hidden md:block text-2xl font-semibold">Categories & rules</h1>
       {msg && <Card className="border-brand/40"><div className="text-sm text-brand">{msg}</div></Card>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <h3 className="font-medium mb-3">Categories</h3>
-          <div className="flex flex-wrap gap-2 mb-3">
-            {categories.map((c) => (
-              <span key={c.name} className="flex items-center gap-1 bg-panel2 rounded px-2 py-1 text-sm">
+      <Card>
+        <h3 className="font-medium mb-3">Categories</h3>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {categories.map((c) => {
+            const color = categoryColor(c.name);
+            return (
+              <span
+                key={c.name}
+                className="flex items-center gap-1.5 rounded-full pl-2 pr-1 py-1 text-sm font-medium"
+                style={{ background: `${color}22`, color }}
+              >
+                <span className="w-2 h-2 rounded-full" style={{ background: color }} />
                 {c.name}
                 {c.is_builtin === 0 && (
                   <button
-                    className="text-muted hover:text-rose-400"
+                    className="opacity-70 hover:opacity-100 w-4"
                     onClick={async () => {
                       if (confirm(`Delete category "${c.name}"? Transactions become uncategorized.`)) {
                         await api.deleteCategory(c.name);
@@ -74,92 +81,98 @@ export function Rules(): JSX.Element {
                   </button>
                 )}
               </span>
-            ))}
+            );
+          })}
+        </div>
+        <div className="flex gap-2">
+          <input
+            className="input flex-1"
+            placeholder="New category name"
+            value={newCat}
+            onChange={(e) => setNewCat(e.target.value)}
+          />
+          <Button
+            onClick={async () => {
+              if (newCat.trim()) {
+                await api.addCategory(newCat.trim());
+                setNewCat('');
+                await load();
+              }
+            }}
+          >
+            Add
+          </Button>
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="font-medium mb-3">Add a rule</h3>
+        <div className="space-y-2">
+          <input
+            className="input"
+            placeholder="Merchant text to match (e.g. שופרסל, wolt)"
+            value={pattern}
+            onChange={(e) => setPattern(e.target.value)}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <select className="input" value={matchType} onChange={(e) => setMatchType(e.target.value as any)}>
+              <option value="contains">contains</option>
+              <option value="exact">exact</option>
+              <option value="regex">regex</option>
+            </select>
+            <select className="input" value={ruleCat} onChange={(e) => setRuleCat(e.target.value)}>
+              {categories.map((c) => (
+                <option key={c.name} value={c.name}>{c.name}</option>
+              ))}
+            </select>
           </div>
           <div className="flex gap-2">
-            <input
-              className="input flex-1"
-              placeholder="New category name"
-              value={newCat}
-              onChange={(e) => setNewCat(e.target.value)}
-            />
+            <Button onClick={addRule} className="flex-1">Add rule</Button>
             <Button
+              variant="ghost"
               onClick={async () => {
-                if (newCat.trim()) {
-                  await api.addCategory(newCat.trim());
-                  setNewCat('');
-                  await load();
-                }
+                const r = await api.recategorizeAll();
+                setMsg(`${r.recategorized} transactions recategorized.`);
+                await load();
               }}
             >
-              Add
+              Re-apply all
             </Button>
           </div>
-        </Card>
-
-        <Card>
-          <h3 className="font-medium mb-3">Add a rule</h3>
-          <div className="space-y-2">
-            <input
-              className="input"
-              placeholder="Merchant text to match (e.g. שופרסל, wolt)"
-              value={pattern}
-              onChange={(e) => setPattern(e.target.value)}
-            />
-            <div className="flex gap-2">
-              <select className="input flex-1" value={matchType} onChange={(e) => setMatchType(e.target.value as any)}>
-                <option value="contains">contains</option>
-                <option value="exact">exact</option>
-                <option value="regex">regex</option>
-              </select>
-              <select className="input flex-1" value={ruleCat} onChange={(e) => setRuleCat(e.target.value)}>
-                {categories.map((c) => (
-                  <option key={c.name} value={c.name}>{c.name}</option>
-                ))}
-              </select>
-              <Button onClick={addRule}>Add</Button>
-            </div>
-            <Button variant="ghost" onClick={async () => { const r = await api.recategorizeAll(); setMsg(`${r.recategorized} transactions recategorized.`); await load(); }}>
-              Re-apply all rules
-            </Button>
-          </div>
-        </Card>
-      </div>
+        </div>
+      </Card>
 
       <Card>
         <h3 className="font-medium mb-3">Rules ({rules.length})</h3>
         {rules.length === 0 ? (
           <div className="text-muted text-sm">No rules yet. Add one above, or recategorize a transaction to create one.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-muted text-left border-b border-edge">
-                  <th className="py-2 pr-2 font-medium">Pattern</th>
-                  <th className="py-2 pr-2 font-medium">Match</th>
-                  <th className="py-2 pr-2 font-medium">Category</th>
-                  <th className="py-2 pr-2 font-medium">Source</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rules.map((r) => (
-                  <tr key={r.id} className="border-b border-edge/40">
-                    <td className="py-1.5 pr-2"><Bidi>{r.pattern}</Bidi></td>
-                    <td className="py-1.5 pr-2 text-muted">{r.match_type}</td>
-                    <td className="py-1.5 pr-2">{r.category}</td>
-                    <td className="py-1.5 pr-2">
-                      <Badge tone={r.source === 'llm' ? 'email' : 'default'}>{r.source}</Badge>
-                    </td>
-                    <td className="py-1.5 text-right">
-                      <button className="text-muted hover:text-rose-400" onClick={async () => { await api.deleteRule(r.id); await load(); }}>
-                        delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="divide-y divide-edge/40">
+            {rules.map((r) => {
+              const color = categoryColor(r.category);
+              return (
+                <div key={r.id} className="flex items-center gap-2 py-2">
+                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+                  <div className="flex-1 min-w-0">
+                    <Bidi className="font-medium truncate block">{r.pattern}</Bidi>
+                    <div className="text-xs text-muted flex items-center gap-2">
+                      <span>{r.match_type}</span>
+                      <span style={{ color }}>{r.category}</span>
+                      {r.source === 'llm' && <Badge tone="email">AI</Badge>}
+                    </div>
+                  </div>
+                  <button
+                    className="text-muted hover:text-rose-400 text-sm shrink-0"
+                    onClick={async () => {
+                      await api.deleteRule(r.id);
+                      await load();
+                    }}
+                  >
+                    delete
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </Card>
@@ -171,9 +184,9 @@ export function Rules(): JSX.Element {
             {uncategorizedMerchants.slice(0, 40).map((m) => (
               <button
                 key={m.merchant}
-                className="bg-panel2 rounded px-2 py-1 text-xs hover:bg-edge"
+                className="bg-panel2 rounded-full px-3 py-1 text-xs hover:bg-edge active:scale-95 transition-transform"
                 onClick={() => setPattern(m.merchant)}
-                title="Click to fill the rule pattern"
+                title="Tap to fill the rule pattern"
               >
                 <Bidi>{m.merchant}</Bidi> <span className="text-muted">×{m.count}</span>
               </button>
