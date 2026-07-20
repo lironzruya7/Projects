@@ -1,6 +1,8 @@
 import { google } from 'googleapis';
-import type { OAuth2Client } from 'google-auth-library';
 import { config, gmailConfigured } from '../config.js';
+// Derive the client type from googleapis itself so it always matches the
+// google-auth-library version googleapis bundles (avoids duplicate-copy type clashes).
+type OAuth2Client = InstanceType<typeof google.auth.OAuth2>;
 import { htmlToText } from './html.js';
 import type { EmailAttachment, EmailMessage, EmailProvider } from './types.js';
 import { loadToken, saveToken } from './tokenStore.js';

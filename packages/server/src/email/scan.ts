@@ -3,7 +3,7 @@ import { ParsedTransaction } from '../models/types.js';
 import { extractPdfText } from '../parsers/pdf.js';
 import { ocrImage, ocrPdf } from '../parsers/ocr.js';
 import { extractReceipt } from '../parsers/receipt.js';
-import { createBatch, setBatchRowCount } from '../repo/batches.js';
+import { createBatch, deleteBatch, setBatchRowCount } from '../repo/batches.js';
 import { insertParsed } from '../repo/transactions.js';
 import { gmailProvider } from './gmail.js';
 import { outlookProvider } from './outlook.js';
@@ -149,20 +149,29 @@ export async function runScan(opts?: { providerName?: EmailProviderName; maxResu
   });
 
   const toInsert: ParsedTransaction[] = [];
+  const seenThisScan = new Set<string>();
   let skipped = 0;
   for (const msg of messages) {
     const candidates = await messageToTransactions(msg, provider.name);
     for (const c of candidates) {
-      if (c.sourceRef && existsRef.get(c.sourceRef)) {
+      const ref = c.sourceRef ?? '';
+      // Idempotent: skip anything already in the DB (from a previous scan) OR
+      // already queued in this same scan. source_ref is stable per email/
+      // attachment (provider:messageId[:filename]), so a receipt is never
+      // imported twice — re-scanning only ever adds genuinely new emails.
+      if (ref && (existsRef.get(ref) || seenThisScan.has(ref))) {
         skipped++;
         continue;
       }
+      if (ref) seenThisScan.add(ref);
       toInsert.push(c);
     }
   }
 
   const ids = insertParsed(toInsert, batchId);
-  setBatchRowCount(batchId, ids.length);
+  // Don't leave an empty batch cluttering the import history on a no-op re-scan.
+  if (ids.length === 0) deleteBatch(batchId);
+  else setBatchRowCount(batchId, ids.length);
 
   return {
     provider: provider.name,
