@@ -153,7 +153,14 @@ The scope is `Mail.Read` (read-only) + `offline_access` (so the app can refresh 
 - Re-scans are idempotent — an email already imported is skipped.
 
 > OCR language data (`tesseract.js`) downloads on first use. If your environment blocks
-> that download, OCR is skipped gracefully and everything else still works.
+> that download, OCR is skipped gracefully and everything else still works. To run OCR
+> **fully offline**, download `eng.traineddata` + `heb.traineddata` from
+> [tessdata_fast](https://github.com/tesseract-ocr/tessdata_fast) into a folder and set
+> `TESSDATA_PATH` to it.
+>
+> **Scan a receipt:** the Import page has a "📷 Scan a receipt" button — photograph a paper
+> receipt (camera on mobile) or pick a PDF. It's OCR'd, added to the ledger automatically,
+> and de-duplicated against the matching card/email charge on its own.
 >
 > **Scanned PDFs:** a PDF with no text layer (a scanned image) is OCR'd by rendering its
 > pages to images first, which needs **poppler-utils** on the machine:

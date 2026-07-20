@@ -33,6 +33,9 @@ export const config = {
   attachmentsDir: resolve(dirname(resolve(repoRoot, envStr('DATABASE_PATH', './data/finance.sqlite'))), 'attachments'),
   defaultCurrency: envStr('DEFAULT_CURRENCY', 'ILS'),
   tokenEncryptionKey: envStr('TOKEN_ENCRYPTION_KEY'),
+  // Optional local directory of tesseract *.traineddata files. When set, OCR
+  // runs fully offline (no CDN download). Leave empty to fetch on first use.
+  tessdataPath: envStr('TESSDATA_PATH'),
   gmail: {
     clientId: envStr('GMAIL_CLIENT_ID'),
     clientSecret: envStr('GMAIL_CLIENT_SECRET'),

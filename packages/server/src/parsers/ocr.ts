@@ -20,7 +20,12 @@ export async function ocrImage(buf: Buffer): Promise<string> {
 async function runOcr(buf: Buffer): Promise<string> {
   try {
     const { createWorker } = await import('tesseract.js');
-    const worker = await createWorker('heb+eng');
+    const { config } = await import('../config.js');
+    // Use local language data when TESSDATA_PATH is set (offline OCR).
+    const opts = config.tessdataPath
+      ? { langPath: config.tessdataPath, gzip: false, cacheMethod: 'none' as const }
+      : {};
+    const worker = await createWorker('heb+eng', 1, opts);
     try {
       const { data } = await worker.recognize(buf);
       return data.text ?? '';
