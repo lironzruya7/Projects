@@ -117,6 +117,29 @@ modify or send anything.
 **IMAP alternative:** instead of the Gmail API, set `IMAP_HOST/PORT/USER/PASSWORD` (use an
 app password). The scanner uses the same interface and pipeline.
 
+## Microsoft / Outlook setup (Outlook.com & Microsoft 365)
+
+Uses the Microsoft Graph API with a read-only `Mail.Read` scope. You can connect a Gmail
+**and** an Outlook account at the same time — a scan can run both and merge the results.
+
+1. Go to the [Azure Portal](https://portal.azure.com) → **Microsoft Entra ID** →
+   **App registrations** → **New registration**.
+2. Name it anything. Under **Supported account types**, choose
+   *Accounts in any organizational directory and personal Microsoft accounts* (this maps to
+   `OUTLOOK_TENANT=common`; pick *Personal Microsoft accounts only* → `consumers` if you only
+   use outlook.com/hotmail).
+3. **Redirect URI** → platform **Web** →
+   `http://localhost:4000/api/email/outlook/callback`
+   (on a VPS, use your `https://<vps>.<tailnet>.ts.net/api/email/outlook/callback`).
+4. **Certificates & secrets → New client secret** → copy the secret **value**.
+5. **API permissions → Add a permission → Microsoft Graph → Delegated →** `Mail.Read`
+   (and `offline_access`, usually added automatically).
+6. Put the **Application (client) ID** and the secret into `.env`
+   (`OUTLOOK_CLIENT_ID`, `OUTLOOK_CLIENT_SECRET`, and `OUTLOOK_TENANT` if not `common`),
+   restart, then **Settings → Outlook → Connect**.
+
+The scope is `Mail.Read` (read-only) + `offline_access` (so the app can refresh its token).
+
 ### What the email scanner does
 
 - Searches your inbox with configurable HE + EN keywords

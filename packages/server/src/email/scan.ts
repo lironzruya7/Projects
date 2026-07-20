@@ -6,14 +6,27 @@ import { extractReceipt } from '../parsers/receipt.js';
 import { createBatch, setBatchRowCount } from '../repo/batches.js';
 import { insertParsed } from '../repo/transactions.js';
 import { gmailProvider } from './gmail.js';
+import { outlookProvider } from './outlook.js';
 import { imapProvider } from './imap.js';
-import { buildQuery, type EmailMessage, type EmailProvider } from './types.js';
+import { buildQuery, type EmailMessage, type EmailProvider, type EmailProviderName } from './types.js';
 
-export function getProvider(name?: 'gmail' | 'imap'): EmailProvider {
+const ALL_PROVIDERS: EmailProvider[] = [gmailProvider, outlookProvider, imapProvider];
+
+export function getProvider(name?: EmailProviderName): EmailProvider {
   if (name === 'imap') return imapProvider;
   if (name === 'gmail') return gmailProvider;
-  // Prefer Gmail if configured, else IMAP.
-  return gmailProvider.isConfigured() ? gmailProvider : imapProvider;
+  if (name === 'outlook') return outlookProvider;
+  // Default preference: first configured provider.
+  return ALL_PROVIDERS.find((p) => p.isConfigured()) ?? gmailProvider;
+}
+
+/** Providers that are both configured and connected (usable for a scan). */
+export async function connectedProviders(): Promise<EmailProvider[]> {
+  const out: EmailProvider[] = [];
+  for (const p of ALL_PROVIDERS) {
+    if (p.isConfigured() && (await p.isConnected())) out.push(p);
+  }
+  return out;
 }
 
 interface EmailSettings {
@@ -102,10 +115,11 @@ export interface ScanResult {
   messagesScanned: number;
   transactionsCreated: number;
   skippedExisting: number;
+  error?: string;
 }
 
 /** Run an email scan: search, parse, and insert new transactions (idempotent by source_ref). */
-export async function runScan(opts?: { providerName?: 'gmail' | 'imap'; maxResults?: number }): Promise<ScanResult> {
+export async function runScan(opts?: { providerName?: EmailProviderName; maxResults?: number }): Promise<ScanResult> {
   const settings = getSetting<EmailSettings>('email', {
     keywords: ['invoice', 'receipt', 'order', 'payment', 'חשבונית', 'קבלה', 'תשלום', 'הזמנה'],
     senderDomains: [],
@@ -155,5 +169,43 @@ export async function runScan(opts?: { providerName?: 'gmail' | 'imap'; maxResul
     messagesScanned: messages.length,
     transactionsCreated: ids.length,
     skippedExisting: skipped,
+  };
+}
+
+export interface MultiScanResult {
+  results: ScanResult[];
+  messagesScanned: number;
+  transactionsCreated: number;
+  skippedExisting: number;
+}
+
+/**
+ * Scan every connected provider (Gmail + Outlook + IMAP) and aggregate. Used when
+ * the caller doesn't pick a specific provider. Skips providers that error so one
+ * broken account doesn't sink the others.
+ */
+export async function scanAll(opts?: { maxResults?: number }): Promise<MultiScanResult> {
+  const providers = await connectedProviders();
+  if (providers.length === 0) throw new Error('No email account is connected. Connect Gmail or Outlook first.');
+  const results: ScanResult[] = [];
+  for (const p of providers) {
+    try {
+      results.push(await runScan({ providerName: p.name, maxResults: opts?.maxResults }));
+    } catch (err) {
+      results.push({
+        provider: p.name,
+        query: '(failed)',
+        messagesScanned: 0,
+        transactionsCreated: 0,
+        skippedExisting: 0,
+        error: (err as Error).message,
+      } as ScanResult);
+    }
+  }
+  return {
+    results,
+    messagesScanned: results.reduce((s, r) => s + r.messagesScanned, 0),
+    transactionsCreated: results.reduce((s, r) => s + r.transactionsCreated, 0),
+    skippedExisting: results.reduce((s, r) => s + r.skippedExisting, 0),
   };
 }

@@ -219,15 +219,20 @@ export const api = {
 
   // Email
   emailStatus: () =>
-    req<{ gmail: { configured: boolean; connected: boolean }; imap: { configured: boolean }; settings: any }>(
-      '/api/email/status',
-    ),
+    req<{
+      gmail: { configured: boolean; connected: boolean };
+      outlook: { configured: boolean; connected: boolean };
+      imap: { configured: boolean };
+      settings: any;
+    }>('/api/email/status'),
   emailSettings: () => req<any>('/api/email/settings'),
   updateEmailSettings: (body: unknown) =>
     req('/api/email/settings', { method: 'PUT', body: JSON.stringify(body) }),
   gmailAuthUrl: () => req<{ url: string }>('/api/email/gmail/auth-url'),
   gmailDisconnect: () => req('/api/email/gmail/disconnect', { method: 'POST' }),
-  scanEmail: (body: unknown = {}) =>
+  outlookAuthUrl: () => req<{ url: string }>('/api/email/outlook/auth-url'),
+  outlookDisconnect: () => req('/api/email/outlook/disconnect', { method: 'POST' }),
+  scanEmail: (body: { provider?: 'gmail' | 'outlook' | 'imap'; maxResults?: number } = {}) =>
     req<{ messagesScanned: number; transactionsCreated: number; skippedExisting: number; dedup: unknown }>(
       '/api/email/scan',
       { method: 'POST', body: JSON.stringify(body) },

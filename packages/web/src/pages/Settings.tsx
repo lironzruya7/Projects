@@ -31,11 +31,21 @@ export function Settings(): JSX.Element {
     }
   }
 
-  async function scan(): Promise<void> {
-    setBusy(true);
-    setMsg('Scanning email… this can take a minute.');
+  async function connectOutlook(): Promise<void> {
     try {
-      const r = await api.scanEmail();
+      const { url } = await api.outlookAuthUrl();
+      window.open(url, '_blank', 'width=520,height=640');
+      setMsg('Complete the Microsoft consent in the popup, then click "Refresh status".');
+    } catch (e) {
+      setMsg((e as Error).message);
+    }
+  }
+
+  async function scan(provider?: 'gmail' | 'outlook' | 'imap'): Promise<void> {
+    setBusy(true);
+    setMsg(`Scanning ${provider ?? 'all'} email… this can take a minute.`);
+    try {
+      const r = await api.scanEmail(provider ? { provider } : {});
       setMsg(`Scanned ${r.messagesScanned} emails · created ${r.transactionsCreated} transactions · skipped ${r.skippedExisting} already-imported.`);
     } catch (e) {
       setMsg((e as Error).message);
@@ -76,33 +86,40 @@ export function Settings(): JSX.Element {
       <Card>
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-medium">Email scanning</h3>
-          <div className="flex gap-2 items-center">
-            {email.gmail.connected ? <Badge tone="good">Gmail connected</Badge> :
-              email.gmail.configured ? <Badge tone="warn">Gmail not connected</Badge> :
-              <Badge>Gmail not configured</Badge>}
-            {email.imap.configured && <Badge tone="good">IMAP ready</Badge>}
-          </div>
+          {email.imap.configured && <Badge tone="good">IMAP ready</Badge>}
         </div>
 
-        {!email.gmail.configured && !email.imap.configured && (
-          <p className="text-sm text-muted mb-3">
-            Set <code>GMAIL_CLIENT_ID</code> / <code>GMAIL_CLIENT_SECRET</code> in <code>.env</code> (see README for
-            Google OAuth setup), or configure IMAP. Then restart the server.
-          </p>
-        )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+          {/* Gmail account */}
+          <ProviderCard
+            title="Gmail"
+            configured={email.gmail.configured}
+            connected={email.gmail.connected}
+            hint="Set GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET in .env (see README → Google OAuth setup)."
+            onConnect={connectGmail}
+            onDisconnect={async () => { await api.gmailDisconnect(); await load(); }}
+            onScan={() => scan('gmail')}
+            busy={busy}
+          />
+          {/* Outlook / Microsoft account */}
+          <ProviderCard
+            title="Outlook / Microsoft"
+            configured={email.outlook.configured}
+            connected={email.outlook.connected}
+            hint="Set OUTLOOK_CLIENT_ID / OUTLOOK_CLIENT_SECRET in .env (see README → Microsoft/Outlook setup)."
+            onConnect={connectOutlook}
+            onDisconnect={async () => { await api.outlookDisconnect(); await load(); }}
+            onScan={() => scan('outlook')}
+            busy={busy}
+          />
+        </div>
 
         <div className="flex flex-wrap gap-2 mb-4">
-          {email.gmail.configured && !email.gmail.connected && (
-            <Button onClick={connectGmail}>Connect Gmail</Button>
-          )}
-          {email.gmail.connected && (
-            <Button variant="ghost" onClick={async () => { await api.gmailDisconnect(); await load(); }}>
-              Disconnect Gmail
-            </Button>
-          )}
           <Button variant="ghost" onClick={load}>Refresh status</Button>
-          {(email.gmail.connected || email.imap.configured) && (
-            <Button onClick={scan} disabled={busy}>{busy ? 'Scanning…' : 'Scan email now'}</Button>
+          {(email.gmail.connected || email.outlook.connected || email.imap.configured) && (
+            <Button onClick={() => scan()} disabled={busy}>
+              {busy ? 'Scanning…' : 'Scan all connected accounts'}
+            </Button>
           )}
         </div>
 
@@ -184,6 +201,54 @@ export function Settings(): JSX.Element {
         </div>
         <p className="text-xs text-muted mt-2">Everything is stored locally in a SQLite file. No cloud sync.</p>
       </Card>
+    </div>
+  );
+}
+
+function ProviderCard({
+  title,
+  configured,
+  connected,
+  hint,
+  onConnect,
+  onDisconnect,
+  onScan,
+  busy,
+}: {
+  title: string;
+  configured: boolean;
+  connected: boolean;
+  hint: string;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  onScan: () => void;
+  busy: boolean;
+}): JSX.Element {
+  return (
+    <div className="border border-edge rounded-lg p-3 bg-panel2/30">
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-medium">{title}</span>
+        {connected ? (
+          <Badge tone="good">connected</Badge>
+        ) : configured ? (
+          <Badge tone="warn">not connected</Badge>
+        ) : (
+          <Badge>not configured</Badge>
+        )}
+      </div>
+      {!configured ? (
+        <p className="text-xs text-muted">{hint}</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {!connected && <Button onClick={onConnect}>Connect</Button>}
+          {connected && (
+            <>
+              <Button onClick={onScan} disabled={busy}>Scan</Button>
+              <Button variant="ghost" onClick={onDisconnect}>Disconnect</Button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

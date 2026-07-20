@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import type { OAuth2Client } from 'google-auth-library';
 import { config, gmailConfigured } from '../config.js';
+import { htmlToText } from './html.js';
 import type { EmailAttachment, EmailMessage, EmailProvider } from './types.js';
 import { loadToken, saveToken } from './tokenStore.js';
 
@@ -69,22 +70,6 @@ function collectBodyAndAttachments(
     acc.html += decodeBody(payload.body?.data);
   }
   for (const part of payload.parts ?? []) collectBodyAndAttachments(part, acc);
-}
-
-function htmlToText(html: string): string {
-  return html
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<br\s*\/?>(?=)/gi, '\n')
-    .replace(/<\/(p|div|tr|li|h[1-6])>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
 }
 
 export const gmailProvider: EmailProvider = {

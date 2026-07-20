@@ -36,6 +36,13 @@ export const config = {
     clientSecret: envStr('GMAIL_CLIENT_SECRET'),
     redirectUri: envStr('GMAIL_REDIRECT_URI', 'http://localhost:4000/api/email/gmail/callback'),
   },
+  outlook: {
+    clientId: envStr('OUTLOOK_CLIENT_ID'),
+    clientSecret: envStr('OUTLOOK_CLIENT_SECRET'),
+    redirectUri: envStr('OUTLOOK_REDIRECT_URI', 'http://localhost:4000/api/email/outlook/callback'),
+    // 'common' = work + personal accounts, 'consumers' = personal only, or a tenant id.
+    tenant: envStr('OUTLOOK_TENANT', 'common'),
+  },
   imap: {
     host: envStr('IMAP_HOST'),
     port: Number(envStr('IMAP_PORT', '993')),
@@ -50,6 +57,10 @@ export const config = {
 
 export function gmailConfigured(): boolean {
   return Boolean(config.gmail.clientId && config.gmail.clientSecret);
+}
+
+export function outlookConfigured(): boolean {
+  return Boolean(config.outlook.clientId && config.outlook.clientSecret);
 }
 
 export function anthropicConfigured(): boolean {

@@ -16,9 +16,11 @@ export interface EmailMessage {
   attachments: EmailAttachment[];
 }
 
-/** Common interface implemented by both the Gmail API and IMAP providers. */
+export type EmailProviderName = 'gmail' | 'outlook' | 'imap';
+
+/** Common interface implemented by the Gmail, Outlook, and IMAP providers. */
 export interface EmailProvider {
-  readonly name: 'gmail' | 'imap';
+  readonly name: EmailProviderName;
   isConfigured(): boolean;
   isConnected(): Promise<boolean>;
   /** Search and return full messages (body + attachments) for a query. */
