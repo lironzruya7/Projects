@@ -39,7 +39,7 @@ export function Duplicates(): JSX.Element {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Duplicates & double charges</h1>
+        <h1 className="hidden md:block text-2xl font-semibold">Duplicates & double charges</h1>
         <div className="flex gap-2">
           <label className="text-sm text-muted flex items-center gap-1">
             <input type="checkbox" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} />

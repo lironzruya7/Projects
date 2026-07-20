@@ -2,13 +2,13 @@ import { Fragment, useState } from 'react';
 import type { Category, LedgerEntry } from '../api/client';
 import { api } from '../api/client';
 import { formatDate, formatMoney } from '../lib/format';
+import { categoryColor } from '../lib/colors';
 import { Badge, Bidi, Button } from './ui';
 
 function sourceTone(t: string): 'bank' | 'card' | 'email' {
   return t === 'bank' ? 'bank' : t === 'card' ? 'card' : 'email';
 }
 
-/** A URL to open the original PDF/image, when this source is an email attachment. */
 function attachmentUrl(s: { id: string; sourceType: string; sourceRef: string | null }): string | null {
   const parts = (s.sourceRef ?? '').split(':');
   if (s.sourceType === 'email' && (parts[0] === 'gmail' || parts[0] === 'outlook') && parts.length >= 3) {
@@ -34,53 +34,39 @@ export function TransactionTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-muted text-left border-b border-edge">
-            <th className="py-2 pr-2 font-medium">Date</th>
-            <th className="py-2 pr-2 font-medium">Merchant</th>
-            <th className="py-2 pr-2 font-medium">Category</th>
-            <th className="py-2 pr-2 font-medium">Source</th>
-            <th className="py-2 pl-2 font-medium text-right">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {entries.map((e) => (
-            <Fragment key={e.id}>
-              <tr className="border-b border-edge/50 hover:bg-panel2/40">
-                <td className="py-2 pr-2 whitespace-nowrap text-muted">{formatDate(e.date)}</td>
-                <td className="py-2 pr-2">
-                  <div className="flex items-center gap-2">
-                    {e.sourceCount > 1 && (
-                      <button
-                        className="text-brand text-xs"
-                        onClick={() => setExpanded(expanded === e.id ? null : e.id)}
-                        title={`${e.sourceCount} sources merged`}
-                      >
-                        {expanded === e.id ? '▼' : '▶'}
-                      </button>
-                    )}
-                    <Bidi className="font-medium">{e.merchantNormalized || e.merchantRaw || '(unknown)'}</Bidi>
-                    {e.sourceCount > 1 && <Badge tone="good">×{e.sourceCount}</Badge>}
-                    {attachmentUrl(e) && (
-                      <a
-                        href={attachmentUrl(e)!}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="Open the original PDF"
-                        className="text-brand hover:underline text-xs whitespace-nowrap"
-                        onClick={(ev) => ev.stopPropagation()}
-                      >
-                        📄 PDF
-                      </a>
-                    )}
-                  </div>
-                  {e.description && e.description !== e.merchantRaw && (
-                    <Bidi className="text-muted text-xs">{e.description}</Bidi>
+    <div className="divide-y divide-edge/40">
+      {entries.map((e) => {
+        const color = categoryColor(e.category);
+        const isOpen = expanded === e.id;
+        return (
+          <Fragment key={e.id}>
+            <div className="flex items-start gap-3 py-2.5">
+              <span className="w-1.5 h-9 rounded-full shrink-0 mt-0.5" style={{ background: color }} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <Bidi className="font-medium truncate">{e.merchantNormalized || e.merchantRaw || '(unknown)'}</Bidi>
+                  {e.sourceCount > 1 && (
+                    <button className="text-brand text-xs shrink-0" onClick={() => setExpanded(isOpen ? null : e.id)}>
+                      <Badge tone="good">×{e.sourceCount} {isOpen ? '▲' : '▼'}</Badge>
+                    </button>
                   )}
-                </td>
-                <td className="py-2 pr-2">
+                  {attachmentUrl(e) && (
+                    <a
+                      href={attachmentUrl(e)!}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-brand text-xs shrink-0"
+                      onClick={(ev) => ev.stopPropagation()}
+                    >
+                      📄
+                    </a>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span className="text-muted text-xs">{formatDate(e.date)}</span>
+                  {e.sourceTypes.map((t) => (
+                    <span key={t} className="w-1.5 h-1.5 rounded-full" style={{ background: sourceDot(t) }} title={t} />
+                  ))}
                   {editing === e.id ? (
                     <CategoryPicker
                       categories={categories}
@@ -94,83 +80,63 @@ export function TransactionTable({
                     />
                   ) : (
                     <button
-                      className="text-left"
                       onClick={() => setEditing(e.id)}
-                      title="Click to recategorize"
+                      className="text-xs px-2 py-0.5 rounded-full font-medium"
+                      style={{ background: `${color}22`, color }}
                     >
-                      {e.category ? (
-                        <span className="px-2 py-0.5 rounded bg-panel2 text-ink">{e.category}</span>
-                      ) : (
-                        <span className="text-muted italic">uncategorized</span>
-                      )}
-                      {e.categorySource === 'llm' && <span className="ml-1 text-xs text-amber-300">AI</span>}
+                      {e.category ?? 'uncategorized'}
+                      {e.categorySource === 'llm' && ' ·AI'}
                     </button>
                   )}
-                </td>
-                <td className="py-2 pr-2">
-                  <div className="flex gap-1 flex-wrap">
-                    {e.sourceTypes.map((t) => (
-                      <Badge key={t} tone={sourceTone(t)}>
-                        {t}
-                      </Badge>
-                    ))}
-                  </div>
-                </td>
-                <td className={`py-2 pl-2 text-right whitespace-nowrap font-medium ${e.amount < 0 ? 'text-ink' : 'text-emerald-400'}`}>
-                  {formatMoney(e.amount, e.currency, { sign: true })}
-                </td>
-              </tr>
-              {expanded === e.id && (
-                <tr className="bg-panel2/30">
-                  <td colSpan={5} className="px-4 py-2">
-                    <div className="text-xs text-muted mb-1">Merged from {e.sourceCount} sources:</div>
-                    <div className="space-y-1">
-                      {e.sources.map((s) => (
-                        <div key={s.id} className="flex items-center justify-between gap-3 text-xs">
-                          <div className="flex items-center gap-2">
-                            <Badge tone={sourceTone(s.sourceType)}>{s.sourceType}</Badge>
-                            <span className="text-muted">{s.sourceProvider ?? ''}</span>
-                            <Bidi>{s.merchantRaw}</Bidi>
-                            <span className="text-muted">{formatDate(s.date)}</span>
-                            <span className="text-muted">{s.sourceRef}</span>
-                            {attachmentUrl(s) && (
-                              <a
-                                href={attachmentUrl(s)!}
-                                target="_blank"
-                                rel="noreferrer"
-                                title="Open the original PDF"
-                                className="text-brand hover:underline whitespace-nowrap"
-                              >
-                                📄 PDF
-                              </a>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span>{formatMoney(s.amount, s.currency, { sign: true })}</span>
-                            {s.mergedInto && (
-                              <Button
-                                variant="ghost"
-                                onClick={async () => {
-                                  await api.unmerge(s.id);
-                                  onChanged?.();
-                                }}
-                              >
-                                unmerge
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                </div>
+              </div>
+              <div className={`text-right whitespace-nowrap font-semibold ${e.amount < 0 ? 'text-ink' : 'text-emerald-400'}`}>
+                {formatMoney(e.amount, e.currency, { sign: true })}
+              </div>
+            </div>
+
+            {isOpen && (
+              <div className="bg-panel2/30 rounded-lg px-3 py-2 mb-2 space-y-1.5">
+                <div className="text-xs text-muted">Merged from {e.sourceCount} sources:</div>
+                {e.sources.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Badge tone={sourceTone(s.sourceType)}>{s.sourceType}</Badge>
+                      <Bidi className="truncate">{s.merchantRaw}</Bidi>
+                      <span className="text-muted whitespace-nowrap">{formatDate(s.date)}</span>
+                      {attachmentUrl(s) && (
+                        <a href={attachmentUrl(s)!} target="_blank" rel="noreferrer" className="text-brand shrink-0">
+                          📄 PDF
+                        </a>
+                      )}
                     </div>
-                  </td>
-                </tr>
-              )}
-            </Fragment>
-          ))}
-        </tbody>
-      </table>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span>{formatMoney(s.amount, s.currency, { sign: true })}</span>
+                      {s.mergedInto && (
+                        <button
+                          className="text-muted hover:text-rose-400"
+                          onClick={async () => {
+                            await api.unmerge(s.id);
+                            onChanged?.();
+                          }}
+                        >
+                          unmerge
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Fragment>
+        );
+      })}
     </div>
   );
+}
+
+function sourceDot(t: string): string {
+  return t === 'bank' ? '#38bdf8' : t === 'card' ? '#c084fc' : '#fbbf24';
 }
 
 function CategoryPicker({
@@ -186,11 +152,11 @@ function CategoryPicker({
 }): JSX.Element {
   const [applyToMerchant, setApply] = useState(true);
   return (
-    <div className="flex items-center gap-1">
+    <span className="inline-flex items-center gap-1">
       <select
         autoFocus
         defaultValue={current ?? ''}
-        className="bg-panel2 border border-edge rounded px-2 py-1 text-sm"
+        className="bg-panel2 border border-edge rounded px-2 py-0.5 text-xs"
         onChange={(ev) => onPick(ev.target.value || null, applyToMerchant)}
       >
         <option value="">uncategorized</option>
@@ -200,13 +166,13 @@ function CategoryPicker({
           </option>
         ))}
       </select>
-      <label className="text-xs text-muted flex items-center gap-1" title="Create a rule for this merchant">
+      <label className="text-[10px] text-muted flex items-center gap-0.5" title="Create a rule for this merchant">
         <input type="checkbox" checked={applyToMerchant} onChange={(e) => setApply(e.target.checked)} />
         rule
       </label>
       <button className="text-muted text-xs" onClick={onCancel}>
         ✕
       </button>
-    </div>
+    </span>
   );
 }

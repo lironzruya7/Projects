@@ -50,9 +50,9 @@ export function Transactions(): JSX.Element {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Transactions</h1>
-        <div className="text-sm text-muted">
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="hidden md:block text-2xl font-semibold">Transactions</h1>
+        <div className="text-xs sm:text-sm text-muted">
           {entries.length} entries · spend {formatMoney(total)} · income {formatMoney(income)}
         </div>
       </div>

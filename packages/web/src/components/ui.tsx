@@ -31,22 +31,33 @@ export function StatCard({
   value,
   sub,
   accent,
+  tint = '#38bdf8',
+  icon,
   onClick,
 }: {
   label: string;
   value: string;
   sub?: ReactNode;
   accent?: 'up' | 'down' | 'neutral';
+  tint?: string;
+  icon?: ReactNode;
   onClick?: () => void;
 }): JSX.Element {
   const accentColor =
     accent === 'up' ? 'text-rose-400' : accent === 'down' ? 'text-emerald-400' : 'text-ink';
   return (
     <div
-      className={`bg-panel border border-edge rounded-xl p-4 ${onClick ? 'cursor-pointer hover:border-brand transition-colors' : ''}`}
+      className={`relative overflow-hidden bg-panel border border-edge rounded-2xl p-4 ${
+        onClick ? 'cursor-pointer active:scale-[0.98] hover:border-brand transition-all' : ''
+      }`}
       onClick={onClick}
+      style={{ background: `linear-gradient(135deg, ${tint}14, transparent 60%)` }}
     >
-      <div className="text-muted text-xs uppercase tracking-wide">{label}</div>
+      <div className="absolute left-0 top-0 h-full w-1" style={{ background: tint }} />
+      <div className="flex items-center justify-between">
+        <div className="text-muted text-xs uppercase tracking-wide">{label}</div>
+        {icon && <span className="text-lg opacity-80" style={{ color: tint }}>{icon}</span>}
+      </div>
       <div className={`text-2xl font-semibold mt-1 ${accentColor}`}>{value}</div>
       {sub && <div className="text-muted text-sm mt-1">{sub}</div>}
     </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, type EmailTestResult } from '../api/client';
 import { Badge, Bidi, Button, Card, Spinner } from '../components/ui';
 import { formatDate, formatMoney } from '../lib/format';
@@ -79,8 +80,22 @@ export function Settings(): JSX.Element {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Settings</h1>
+      <h1 className="hidden md:block text-2xl font-semibold">Settings</h1>
       {msg && <Card className="border-brand/40"><div className="text-sm text-brand">{msg}</div></Card>}
+
+      {/* Quick links (mobile reaches these via More) */}
+      <div className="grid grid-cols-2 gap-3">
+        <Link to="/duplicates" className="rounded-2xl p-4 border border-edge bg-panel active:scale-[0.98] transition-transform" style={{ background: 'linear-gradient(135deg, #fb718514, transparent 60%)' }}>
+          <div className="text-lg">⧉</div>
+          <div className="font-medium mt-1">Duplicates</div>
+          <div className="text-xs text-muted">review double charges</div>
+        </Link>
+        <Link to="/rules" className="rounded-2xl p-4 border border-edge bg-panel active:scale-[0.98] transition-transform" style={{ background: 'linear-gradient(135deg, #34d39914, transparent 60%)' }}>
+          <div className="text-lg">⚑</div>
+          <div className="font-medium mt-1">Categories</div>
+          <div className="text-xs text-muted">rules & category list</div>
+        </Link>
+      </div>
 
       {/* General */}
       <Card>

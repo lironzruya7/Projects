@@ -1,4 +1,4 @@
-import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Dashboard } from './pages/Dashboard';
 import { ImportPage } from './pages/Import';
 import { Transactions } from './pages/Transactions';
@@ -8,25 +8,45 @@ import { Insights } from './pages/Insights';
 import { Settings } from './pages/Settings';
 
 const NAV = [
-  { to: '/dashboard', label: 'Dashboard', icon: '◧' },
-  { to: '/transactions', label: 'Transactions', icon: '≣' },
+  { to: '/dashboard', label: 'Home', icon: '◧' },
+  { to: '/transactions', label: 'Ledger', icon: '≣' },
   { to: '/import', label: 'Import', icon: '⇪' },
-  { to: '/duplicates', label: 'Duplicates', icon: '⧉' },
   { to: '/insights', label: 'Insights', icon: '✦' },
-  { to: '/rules', label: 'Categories', icon: '⚑' },
-  { to: '/settings', label: 'Settings', icon: '⚙' },
+  { to: '/settings', label: 'More', icon: '⚙' },
 ];
 
+// Secondary destinations reachable from the "More"/sidebar.
+const SECONDARY = [
+  { to: '/duplicates', label: 'Duplicates', icon: '⧉' },
+  { to: '/rules', label: 'Categories', icon: '⚑' },
+];
+
+const ALL = [...NAV.slice(0, 4), ...SECONDARY, NAV[4]!];
+
+const TITLES: Record<string, string> = {
+  '/dashboard': 'Dashboard',
+  '/transactions': 'Transactions',
+  '/import': 'Import',
+  '/insights': 'Insights',
+  '/duplicates': 'Duplicates',
+  '/rules': 'Categories',
+  '/settings': 'Settings',
+};
+
 export default function App(): JSX.Element {
+  const loc = useLocation();
+  const title = TITLES[loc.pathname] ?? 'Finance';
+
   return (
     <div className="min-h-screen flex">
-      <aside className="w-56 shrink-0 border-r border-edge bg-panel/50 flex flex-col">
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex w-56 shrink-0 border-r border-edge bg-panel/50 flex-col">
         <div className="px-5 py-4 border-b border-edge">
           <div className="text-lg font-semibold text-ink">Finance</div>
           <div className="text-xs text-muted">local-first aggregator</div>
         </div>
         <nav className="flex-1 p-3 space-y-1">
-          {NAV.map((n) => (
+          {ALL.map((n) => (
             <NavLink
               key={n.to}
               to={n.to}
@@ -41,13 +61,17 @@ export default function App(): JSX.Element {
             </NavLink>
           ))}
         </nav>
-        <div className="p-4 text-xs text-muted border-t border-edge">
-          All data stays on your machine.
-        </div>
+        <div className="p-4 text-xs text-muted border-t border-edge">All data stays on your machine.</div>
       </aside>
 
-      <main className="flex-1 min-w-0 overflow-x-hidden">
-        <div className="max-w-6xl mx-auto p-6">
+      <main className="flex-1 min-w-0 overflow-x-hidden pb-24 md:pb-0">
+        {/* Mobile top header */}
+        <header className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 h-14 bg-surface/90 backdrop-blur border-b border-edge">
+          <span className="text-lg font-semibold">{title}</span>
+          <span className="text-xs text-muted">Finance</span>
+        </header>
+
+        <div className="max-w-6xl mx-auto p-4 sm:p-6">
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
@@ -60,6 +84,32 @@ export default function App(): JSX.Element {
           </Routes>
         </div>
       </main>
+
+      {/* Mobile bottom tab bar (iOS-style) */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-panel/95 backdrop-blur border-t border-edge pb-[env(safe-area-inset-bottom)]">
+        <div className="flex justify-around">
+          {NAV.map((n) => (
+            <NavLink
+              key={n.to}
+              to={n.to}
+              className={({ isActive }) =>
+                `flex flex-col items-center justify-center gap-0.5 flex-1 py-2 text-[11px] transition-colors ${
+                  isActive ? 'text-brand' : 'text-muted'
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <span className={`text-lg leading-none ${isActive ? 'scale-110' : ''} transition-transform`}>
+                    {n.icon}
+                  </span>
+                  {n.label}
+                </>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 }

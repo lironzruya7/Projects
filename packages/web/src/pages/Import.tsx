@@ -102,7 +102,7 @@ export function ImportPage(): JSX.Element {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Import bank / card exports</h1>
+      <h1 className="hidden md:block text-2xl font-semibold">Import bank / card exports</h1>
       <p className="text-muted text-sm">
         Upload a CSV or XLSX. Columns are auto-detected for Bank Yahav, Isracard, and Cal — adjust the mapping if
         needed. The mapping is remembered per file format, so re-imports are one click.

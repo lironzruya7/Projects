@@ -26,7 +26,7 @@ export function Insights(): JSX.Element {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Insights</h1>
+      <h1 className="hidden md:block text-2xl font-semibold">Insights</h1>
 
       <Card>
         <div className="flex items-center justify-between mb-3">

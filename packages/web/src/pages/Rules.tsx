@@ -50,7 +50,7 @@ export function Rules(): JSX.Element {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Categories & rules</h1>
+      <h1 className="hidden md:block text-2xl font-semibold">Categories & rules</h1>
       {msg && <Card className="border-brand/40"><div className="text-sm text-brand">{msg}</div></Card>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

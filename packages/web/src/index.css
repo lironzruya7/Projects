@@ -20,9 +20,18 @@ body,
 
 body {
   margin: 0;
-  background: #0f172a;
+  background: radial-gradient(1200px 600px at 100% -10%, #172033 0%, #0f172a 55%);
+  background-attachment: fixed;
   color: #e2e8f0;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans Hebrew', sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Recharts focus outlines on tap look bad on mobile */
+.recharts-wrapper,
+.recharts-surface,
+.recharts-sector {
+  outline: none !important;
 }
 
 /* Render Hebrew / RTL strings correctly even inside an LTR layout. */
