@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { Category, LedgerEntry } from '../api/client';
+import type { Account, Category, LedgerEntry } from '../api/client';
 import { api } from '../api/client';
 import { TransactionTable } from '../components/TransactionTable';
 import { Button, Card, Spinner } from '../components/ui';
+import { accountLabel } from '../lib/accounts';
 import { formatMoney } from '../lib/format';
 
 export function Transactions(): JSX.Element {
   const [params, setParams] = useSearchParams();
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(params.get('search') ?? '');
 
   const filters = {
     category: params.get('category') ?? undefined,
     sourceType: params.get('sourceType') ?? undefined,
+    provider: params.get('provider') ?? undefined,
     merchant: params.get('merchant') ?? undefined,
     from: params.get('from') ?? undefined,
     to: params.get('to') ?? undefined,
@@ -25,9 +28,10 @@ export function Transactions(): JSX.Element {
 
   async function load(): Promise<void> {
     setLoading(true);
-    const [tx, cats] = await Promise.all([api.transactions(filters), api.categories()]);
+    const [tx, cats, accs] = await Promise.all([api.transactions(filters), api.categories(), api.accounts()]);
     setEntries(tx.transactions);
     setCategories(cats.categories);
+    setAccounts(accs.accounts);
     setLoading(false);
   }
 
@@ -89,6 +93,22 @@ export function Transactions(): JSX.Element {
             <option value="card">Card</option>
             <option value="email">Email</option>
           </select>
+          {accounts.some((a) => a.provider) && (
+            <select
+              className="bg-panel2 border border-edge rounded-lg px-2 py-1.5 text-sm"
+              value={filters.provider ?? ''}
+              onChange={(e) => setFilter('provider', e.target.value || undefined)}
+            >
+              <option value="">All accounts</option>
+              {accounts
+                .filter((a) => a.provider)
+                .map((a) => (
+                  <option key={a.provider} value={a.provider!}>
+                    {accountLabel(a.provider, a.sourceType)} ({a.count})
+                  </option>
+                ))}
+            </select>
+          )}
           {activeFilters.length > 0 && (
             <Button variant="ghost" onClick={() => setParams(new URLSearchParams())}>
               Clear

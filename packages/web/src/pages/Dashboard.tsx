@@ -17,6 +17,7 @@ import { api } from '../api/client';
 import { Donut, type DonutDatum } from '../components/Donut';
 import { Bidi, Card, Spinner, StatCard } from '../components/ui';
 import { categoryColor } from '../lib/colors';
+import { accountColor, accountLabel } from '../lib/accounts';
 import { addMonths, formatMoney, formatMonth, formatMonthLong } from '../lib/format';
 
 const TOOLTIP_STYLE = { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, color: '#e2e8f0' };
@@ -155,6 +156,41 @@ export function Dashboard(): JSX.Element {
           </div>
         )}
       </Card>
+
+      {/* Spending by account / card */}
+      {data.byAccount.length > 0 && (
+        <Card>
+          <h3 className="font-medium mb-3">By account · {formatMonth(data.referenceMonth)}</h3>
+          <div className="space-y-2.5">
+            {data.byAccount.map((a) => {
+              const max = data.byAccount[0]!.amount || 1;
+              const color = accountColor(a.provider, a.sourceType);
+              const label = accountLabel(a.provider, a.sourceType);
+              return (
+                <button
+                  key={`${a.provider}|${a.sourceType}`}
+                  className="w-full text-left active:scale-[0.99] transition-transform"
+                  onClick={() =>
+                    nav(a.provider ? `/transactions?provider=${encodeURIComponent(a.provider)}` : `/transactions?sourceType=${a.sourceType}`)
+                  }
+                >
+                  <div className="flex justify-between items-center text-sm mb-1">
+                    <span className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
+                      {label}
+                      <span className="text-muted text-xs">· {a.count}</span>
+                    </span>
+                    <span className="text-muted whitespace-nowrap">{formatMoney(a.amount, currency)}</span>
+                  </div>
+                  <div className="h-2 bg-panel2 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full" style={{ width: `${(a.amount / max) * 100}%`, background: color }} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* Spend over time */}
       <Card>

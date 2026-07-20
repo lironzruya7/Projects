@@ -83,8 +83,15 @@ export interface DashboardSummary {
   spendOverTime: Array<{ month: string; expense: number; income: number }>;
   topMerchants: Array<{ merchant: string; amount: number; count: number }>;
   cashFlow: Array<{ month: string; income: number; expense: number; net: number }>;
+  byAccount: Array<{ provider: string | null; sourceType: string; amount: number; count: number }>;
   counts: { ledger: number; alerts: number };
   range: { min: string; max: string };
+}
+
+export interface Account {
+  provider: string | null;
+  sourceType: string;
+  count: number;
 }
 
 export interface RecurringItem {
@@ -236,6 +243,7 @@ export const api = {
   },
   recurring: () => req<{ recurring: RecurringItem[] }>('/api/insights/recurring'),
   anomalies: () => req<{ anomalies: Anomaly[] }>('/api/insights/anomalies'),
+  accounts: () => req<{ accounts: Account[] }>('/api/accounts'),
 
   // Email
   emailStatus: () =>

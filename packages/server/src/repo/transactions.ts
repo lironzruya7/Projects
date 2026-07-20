@@ -102,6 +102,7 @@ export interface LedgerQuery {
   to?: string;
   category?: string;
   sourceType?: SourceType;
+  provider?: string;
   merchant?: string;
   search?: string;
   uncategorizedOnly?: boolean;
@@ -134,6 +135,10 @@ export function queryLedger(q: LedgerQuery): LedgerEntry[] {
   if (q.sourceType) {
     where.push('source_type = @sourceType');
     params.sourceType = q.sourceType;
+  }
+  if (q.provider) {
+    where.push('source_provider = @provider');
+    params.provider = q.provider;
   }
   if (q.merchant) {
     where.push('merchant_normalized = @merchant');
@@ -223,6 +228,17 @@ export function distinctMerchants(): Array<{ merchant: string; count: number }> 
     )
     .all() as Array<{ merchant: string; count: number }>;
   return rows;
+}
+
+/** Distinct accounts (provider + source type) with transaction counts. */
+export function listAccounts(): Array<{ provider: string | null; sourceType: string; count: number }> {
+  return getDb()
+    .prepare(
+      `SELECT source_provider AS provider, source_type AS sourceType, COUNT(*) AS count
+       FROM transactions WHERE merged_into IS NULL
+       GROUP BY source_provider, source_type ORDER BY count DESC`,
+    )
+    .all() as Array<{ provider: string | null; sourceType: string; count: number }>;
 }
 
 export function uncategorizedMerchants(): string[] {

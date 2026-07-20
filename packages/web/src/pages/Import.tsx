@@ -158,8 +158,8 @@ export function ImportPage(): JSX.Element {
                 <option value="card">Credit card</option>
               </select>
             </Field>
-            <Field label="Provider (optional label)">
-              <input className="input" value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="yahav / isracard / cal" />
+            <Field label="Account name (shown on each transaction)">
+              <input className="input" value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="e.g. yahav · isracard · cal" />
             </Field>
             <Field label="Amount handling">
               <select className="input" value={amountMode} onChange={(e) => setAmountMode(e.target.value as AmountMode)}>

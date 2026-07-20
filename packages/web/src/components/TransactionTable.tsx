@@ -3,10 +3,20 @@ import type { Category, LedgerEntry } from '../api/client';
 import { api } from '../api/client';
 import { formatDate, formatMoney } from '../lib/format';
 import { categoryColor } from '../lib/colors';
+import { accountColor, accountLabel } from '../lib/accounts';
 import { Badge, Bidi, Button } from './ui';
 
-function sourceTone(t: string): 'bank' | 'card' | 'email' {
-  return t === 'bank' ? 'bank' : t === 'card' ? 'card' : 'email';
+/** Small colored chip naming the account/card a source came from. */
+function AccountChip({ provider, sourceType }: { provider: string | null; sourceType: string }): JSX.Element {
+  const color = accountColor(provider, sourceType);
+  return (
+    <span
+      className="text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap"
+      style={{ background: `${color}22`, color }}
+    >
+      {accountLabel(provider, sourceType)}
+    </span>
+  );
 }
 
 function attachmentUrl(s: { id: string; sourceType: string; sourceRef: string | null }): string | null {
@@ -64,8 +74,8 @@ export function TransactionTable({
                 </div>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="text-muted text-xs">{formatDate(e.date)}</span>
-                  {e.sourceTypes.map((t) => (
-                    <span key={t} className="w-1.5 h-1.5 rounded-full" style={{ background: sourceDot(t) }} title={t} />
+                  {distinctAccounts(e).map((a) => (
+                    <AccountChip key={`${a.provider}|${a.sourceType}`} provider={a.provider} sourceType={a.sourceType} />
                   ))}
                   {editing === e.id ? (
                     <CategoryPicker
@@ -101,7 +111,7 @@ export function TransactionTable({
                 {e.sources.map((s) => (
                   <div key={s.id} className="flex items-center justify-between gap-2 text-xs">
                     <div className="flex items-center gap-2 min-w-0">
-                      <Badge tone={sourceTone(s.sourceType)}>{s.sourceType}</Badge>
+                      <AccountChip provider={s.sourceProvider} sourceType={s.sourceType} />
                       <Bidi className="truncate">{s.merchantRaw}</Bidi>
                       <span className="text-muted whitespace-nowrap">{formatDate(s.date)}</span>
                       {attachmentUrl(s) && (
@@ -135,8 +145,14 @@ export function TransactionTable({
   );
 }
 
-function sourceDot(t: string): string {
-  return t === 'bank' ? '#38bdf8' : t === 'card' ? '#c084fc' : '#fbbf24';
+/** Distinct accounts across a ledger entry's sources (provider + type). */
+function distinctAccounts(e: LedgerEntry): Array<{ provider: string | null; sourceType: string }> {
+  const seen = new Map<string, { provider: string | null; sourceType: string }>();
+  for (const s of e.sources) {
+    const key = `${s.sourceProvider ?? ''}|${s.sourceType}`;
+    if (!seen.has(key)) seen.set(key, { provider: s.sourceProvider, sourceType: s.sourceType });
+  }
+  return [...seen.values()];
 }
 
 function CategoryPicker({

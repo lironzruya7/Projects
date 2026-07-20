@@ -10,6 +10,7 @@ const LedgerQuery = z.object({
   to: z.string().optional(),
   category: z.string().optional(),
   sourceType: z.enum(['email', 'bank', 'card']).optional(),
+  provider: z.string().optional(),
   merchant: z.string().optional(),
   search: z.string().optional(),
   uncategorizedOnly: z.coerce.boolean().optional(),
