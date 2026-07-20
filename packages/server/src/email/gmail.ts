@@ -72,6 +72,35 @@ function collectBodyAndAttachments(
   for (const part of payload.parts ?? []) collectBodyAndAttachments(part, acc);
 }
 
+/** Recursively find an attachment part by filename. */
+function findAttachmentPart(payload: any, filename: string): { attachmentId: string; mimeType: string } | null {
+  if (!payload) return null;
+  if (payload.filename === filename && payload.body?.attachmentId) {
+    return { attachmentId: payload.body.attachmentId, mimeType: payload.mimeType ?? 'application/octet-stream' };
+  }
+  for (const part of payload.parts ?? []) {
+    const found = findAttachmentPart(part, filename);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Fetch a single attachment's bytes on demand (no local storage). */
+export async function fetchAttachment(
+  messageId: string,
+  filename: string,
+): Promise<{ data: Buffer; mimeType: string } | null> {
+  const auth = authorizedClient();
+  if (!auth) throw new Error('Gmail not connected');
+  const gmail = google.gmail({ version: 'v1', auth });
+  const full = await gmail.users.messages.get({ userId: 'me', id: messageId, format: 'full' });
+  const part = findAttachmentPart(full.data.payload, filename);
+  if (!part) return null;
+  const att = await gmail.users.messages.attachments.get({ userId: 'me', messageId, id: part.attachmentId });
+  if (!att.data.data) return null;
+  return { data: Buffer.from(att.data.data, 'base64'), mimeType: part.mimeType };
+}
+
 export const gmailProvider: EmailProvider = {
   name: 'gmail',
   isConfigured: () => gmailConfigured(),

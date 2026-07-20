@@ -2,10 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { gmailConfigured, imapConfigured, outlookConfigured } from '../config.js';
 import { getSetting, setSetting } from '../db/db.js';
-import { exchangeCode, getAuthUrl, gmailProvider } from '../email/gmail.js';
+import { exchangeCode, fetchAttachment as gmailFetchAttachment, getAuthUrl, gmailProvider } from '../email/gmail.js';
 import * as outlook from '../email/outlook.js';
 import { deleteToken, hasToken } from '../email/tokenStore.js';
 import { runScan, scanAll, testConnection } from '../email/scan.js';
+import { getTransaction } from '../repo/transactions.js';
 
 export async function emailRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/email/status', async () => ({
@@ -80,6 +81,32 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/email/outlook/disconnect', async () => {
     deleteToken('outlook');
     return { ok: true };
+  });
+
+  // Serve an email PDF/image attachment on demand — fetched live from Gmail/
+  // Outlook via the stored source ref (provider:messageId:filename). Nothing is
+  // stored on disk; the file streams through the app (private, behind Tailscale).
+  app.get('/api/attachments/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const tx = getTransaction(id);
+    if (!tx || !tx.sourceRef) return reply.code(404).send({ error: 'Not found' });
+    const parts = tx.sourceRef.split(':');
+    if (parts.length < 3) return reply.code(404).send({ error: 'This transaction has no attachment' });
+    const provider = parts[0];
+    const messageId = parts[1]!;
+    const filename = parts.slice(2).join(':');
+    try {
+      let att: { data: Buffer; mimeType: string } | null = null;
+      if (provider === 'gmail') att = await gmailFetchAttachment(messageId, filename);
+      else if (provider === 'outlook') att = await outlook.fetchAttachment(messageId, filename);
+      else return reply.code(400).send({ error: `On-demand attachments are not supported for "${provider}"` });
+      if (!att) return reply.code(404).send({ error: 'Attachment not found (the email may have been deleted or moved)' });
+      reply.header('content-type', att.mimeType || 'application/octet-stream');
+      reply.header('content-disposition', `inline; filename="${encodeURIComponent(filename)}"`);
+      return reply.send(att.data);
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
   });
 
   // Dry-run: preview matching emails without importing anything.

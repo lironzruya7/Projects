@@ -8,6 +8,15 @@ function sourceTone(t: string): 'bank' | 'card' | 'email' {
   return t === 'bank' ? 'bank' : t === 'card' ? 'card' : 'email';
 }
 
+/** A URL to open the original PDF/image, when this source is an email attachment. */
+function attachmentUrl(s: { id: string; sourceType: string; sourceRef: string | null }): string | null {
+  const parts = (s.sourceRef ?? '').split(':');
+  if (s.sourceType === 'email' && (parts[0] === 'gmail' || parts[0] === 'outlook') && parts.length >= 3) {
+    return `/api/attachments/${s.id}`;
+  }
+  return null;
+}
+
 export function TransactionTable({
   entries,
   categories,
@@ -54,6 +63,18 @@ export function TransactionTable({
                     )}
                     <Bidi className="font-medium">{e.merchantNormalized || e.merchantRaw || '(unknown)'}</Bidi>
                     {e.sourceCount > 1 && <Badge tone="good">×{e.sourceCount}</Badge>}
+                    {attachmentUrl(e) && (
+                      <a
+                        href={attachmentUrl(e)!}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="Open the original PDF"
+                        className="text-brand hover:underline text-xs whitespace-nowrap"
+                        onClick={(ev) => ev.stopPropagation()}
+                      >
+                        📄 PDF
+                      </a>
+                    )}
                   </div>
                   {e.description && e.description !== e.merchantRaw && (
                     <Bidi className="text-muted text-xs">{e.description}</Bidi>
@@ -112,6 +133,17 @@ export function TransactionTable({
                             <Bidi>{s.merchantRaw}</Bidi>
                             <span className="text-muted">{formatDate(s.date)}</span>
                             <span className="text-muted">{s.sourceRef}</span>
+                            {attachmentUrl(s) && (
+                              <a
+                                href={attachmentUrl(s)!}
+                                target="_blank"
+                                rel="noreferrer"
+                                title="Open the original PDF"
+                                className="text-brand hover:underline whitespace-nowrap"
+                              >
+                                📄 PDF
+                              </a>
+                            )}
                           </div>
                           <div className="flex items-center gap-2">
                             <span>{formatMoney(s.amount, s.currency, { sign: true })}</span>

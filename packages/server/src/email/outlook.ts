@@ -149,6 +149,19 @@ interface GraphMessage {
   body?: { contentType?: string; content?: string };
 }
 
+/** Fetch a single attachment's bytes on demand (no local storage). */
+export async function fetchAttachment(
+  messageId: string,
+  filename: string,
+): Promise<{ data: Buffer; mimeType: string } | null> {
+  const token = await accessToken();
+  if (!token) throw new Error('Outlook not connected');
+  const atts = await fetchAttachments(token, messageId);
+  const match = atts.find((a) => a.filename === filename);
+  if (!match) return null;
+  return { data: match.data, mimeType: match.mimeType };
+}
+
 async function fetchAttachments(token: string, messageId: string): Promise<EmailAttachment[]> {
   const res = await fetch(`${GRAPH}/me/messages/${messageId}/attachments`, {
     headers: { authorization: `Bearer ${token}` },
