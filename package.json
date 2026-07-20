@@ -12,6 +12,7 @@
     "dev:server": "npm -w @finance/server run dev",
     "dev:web": "npm -w @finance/web run dev",
     "build": "npm -w @finance/server run build && npm -w @finance/web run build",
+    "start": "NODE_ENV=production node packages/server/dist/index.js",
     "typecheck": "npm -w @finance/server run typecheck && npm -w @finance/web run typecheck",
     "test": "npm -w @finance/server run test"
   },

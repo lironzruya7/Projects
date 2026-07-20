@@ -21,6 +21,13 @@ function envStr(key: string, fallback = ''): string {
 export const config = {
   repoRoot,
   port: Number(envStr('PORT', '4000')),
+  // Bind address. Default 127.0.0.1 (safe: only local + `tailscale serve`).
+  // Set HOST=0.0.0.0 to listen on all interfaces (then firewall the port yourself).
+  host: envStr('HOST', '127.0.0.1'),
+  // Serve the built frontend from the backend (single origin) when its dist exists.
+  // Forced on when NODE_ENV=production.
+  production: envStr('NODE_ENV') === 'production',
+  webDist: resolve(repoRoot, 'packages/web/dist'),
   databasePath: resolve(repoRoot, envStr('DATABASE_PATH', './data/finance.sqlite')),
   defaultCurrency: envStr('DEFAULT_CURRENCY', 'ILS'),
   tokenEncryptionKey: envStr('TOKEN_ENCRYPTION_KEY'),

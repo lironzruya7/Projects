@@ -218,12 +218,88 @@ Parsed records are validated with Zod at the boundary; malformed rows are surfac
 
 ---
 
+## Deploy on a VPS (Hostinger) + access over Tailscale
+
+This works well as a private, single-user app on a VPS reached only from your own
+devices over [Tailscale](https://tailscale.com). In production the backend serves the
+built frontend from **one port**, so there's a single thing to expose.
+
+> ⚠️ The app has **no login**. Do **not** expose it to the public internet. Keep it on
+> `127.0.0.1` and reach it through Tailscale (below). That's what makes phone + PC access
+> safe.
+
+### 1. One-time server setup
+
+```bash
+# On the Hostinger VPS (Ubuntu). Install Node 20+ and git.
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs git build-essential
+
+git clone <your repo>  finance && cd finance
+cp .env.example .env            # edit if you want Gmail / AI / encryption
+npm install
+npm run build
+```
+
+### 2. Run it (kept alive with pm2)
+
+```bash
+sudo npm i -g pm2
+pm2 start "npm run start" --name finance      # binds 127.0.0.1:4000 by default
+pm2 save && pm2 startup                        # restart on reboot
+```
+
+`npm run start` sets `NODE_ENV=production` and serves both UI and API on `PORT` (4000).
+The SQLite file lives at `./data/finance.sqlite` on the VPS — back that file up and you've
+backed up everything.
+
+### 3. Expose privately with Tailscale
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+
+# Serve the local app on your tailnet over HTTPS (nothing is public):
+sudo tailscale serve --bg 4000
+```
+
+Now open `https://<your-vps-name>.<your-tailnet>.ts.net` from your **phone or PC** (both
+signed into the same Tailscale account). Uploading a bank/card export from the phone works
+through the normal file picker. `tailscale serve` gives you HTTPS automatically and never
+exposes the port to the internet.
+
+> Prefer not to use `tailscale serve`? Set `HOST=0.0.0.0` in `.env`, then firewall the port
+> so only the Tailscale interface can reach it:
+> `sudo ufw allow in on tailscale0 to any port 4000 && sudo ufw enable`.
+> Access it at `http://<vps-tailscale-ip>:4000`.
+
+### 4. Gmail OAuth on the VPS
+
+If you use email scanning, the redirect URI must match the URL you actually open. Set in
+`.env`:
+
+```
+GMAIL_REDIRECT_URI=https://<your-vps-name>.<your-tailnet>.ts.net/api/email/gmail/callback
+```
+
+and add that exact URI under **Authorized redirect URIs** in the Google Cloud console.
+Also set `TOKEN_ENCRYPTION_KEY` so the stored OAuth token is encrypted at rest on the VPS.
+
+### Updating later
+
+```bash
+git pull && npm install && npm run build && pm2 restart finance
+```
+
+---
+
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev` | Start backend + frontend together |
-| `npm run build` | Type-check + build both packages |
+| `npm run dev` | Start backend + frontend together (Vite + API, hot reload) |
+| `npm run build` | Type-check + build both packages for production |
+| `npm run start` | Production: serve UI + API on one port (`NODE_ENV=production`) |
 | `npm run typecheck` | Type-check both packages |
 | `npm test` | Run server unit tests |
 

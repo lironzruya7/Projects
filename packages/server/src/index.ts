@@ -1,5 +1,8 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { config } from './config.js';
 import { getDb } from './db/db.js';
@@ -32,6 +35,27 @@ async function main(): Promise<void> {
   await app.register(llmRoutes);
   await app.register(settingsRoutes);
 
+  // Production: serve the built frontend from this same origin, so there is a
+  // single port to expose (e.g. over Tailscale). Falls back to index.html for
+  // client-side routes (SPA). In dev, Vite serves the frontend instead.
+  const hasBuiltFrontend = existsSync(join(config.webDist, 'index.html'));
+  if (config.production || hasBuiltFrontend) {
+    if (!hasBuiltFrontend) {
+      app.log.warn(`NODE_ENV=production but no built frontend at ${config.webDist}. Run "npm run build" first.`);
+    } else {
+      await app.register(fastifyStatic, { root: config.webDist, prefix: '/' });
+      app.setNotFoundHandler((req, reply) => {
+        // Unknown API routes -> 404 JSON; everything else -> SPA index.
+        if (req.url.startsWith('/api/')) {
+          reply.code(404).send({ error: 'Not found' });
+          return;
+        }
+        reply.sendFile('index.html');
+      });
+      app.log.info(`Serving frontend from ${config.webDist}`);
+    }
+  }
+
   app.setErrorHandler((err: Error & { statusCode?: number }, _req, reply) => {
     app.log.error(err);
     const status = err.statusCode ?? 500;
@@ -41,8 +65,8 @@ async function main(): Promise<void> {
   });
 
   try {
-    await app.listen({ port: config.port, host: '127.0.0.1' });
-    app.log.info(`Finance Aggregator API on http://127.0.0.1:${config.port}`);
+    await app.listen({ port: config.port, host: config.host });
+    app.log.info(`Finance Aggregator on http://${config.host}:${config.port}`);
   } catch (err) {
     app.log.error(err);
     process.exit(1);
