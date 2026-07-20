@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api/client';
-import { Badge, Button, Card, Spinner } from '../components/ui';
+import { api, type EmailTestResult } from '../api/client';
+import { Badge, Bidi, Button, Card, Spinner } from '../components/ui';
+import { formatDate, formatMoney } from '../lib/format';
 
 export function Settings(): JSX.Element {
   const [settings, setSettings] = useState<any>(null);
@@ -8,6 +9,7 @@ export function Settings(): JSX.Element {
   const [llm, setLlm] = useState<{ configured: boolean; enabled: boolean; note: string } | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [testResult, setTestResult] = useState<EmailTestResult | null>(null);
 
   async function load(): Promise<void> {
     const [s, e, l] = await Promise.all([api.settings(), api.emailStatus(), api.llmStatus()]);
@@ -47,6 +49,25 @@ export function Settings(): JSX.Element {
     try {
       const r = await api.scanEmail(provider ? { provider } : {});
       setMsg(`Scanned ${r.messagesScanned} emails · created ${r.transactionsCreated} transactions · skipped ${r.skippedExisting} already-imported.`);
+    } catch (e) {
+      setMsg((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runTest(provider: 'gmail' | 'outlook' | 'imap'): Promise<void> {
+    setBusy(true);
+    setTestResult(null);
+    setMsg(`Testing ${provider} connection…`);
+    try {
+      const r = await api.testEmail({ provider });
+      setTestResult(r);
+      setMsg(
+        r.found === 0
+          ? `Connected, but no emails matched your search. Try widening the keywords or look-back window below.`
+          : `Connected ✓ — ${provider} returned ${r.found} matching emails (nothing imported).`,
+      );
     } catch (e) {
       setMsg((e as Error).message);
     } finally {
@@ -98,6 +119,7 @@ export function Settings(): JSX.Element {
             hint="Set GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET in .env (see README → Google OAuth setup)."
             onConnect={connectGmail}
             onDisconnect={async () => { await api.gmailDisconnect(); await load(); }}
+            onTest={() => runTest('gmail')}
             onScan={() => scan('gmail')}
             busy={busy}
           />
@@ -109,6 +131,7 @@ export function Settings(): JSX.Element {
             hint="Set OUTLOOK_CLIENT_ID / OUTLOOK_CLIENT_SECRET in .env (see README → Microsoft/Outlook setup)."
             onConnect={connectOutlook}
             onDisconnect={async () => { await api.outlookDisconnect(); await load(); }}
+            onTest={() => runTest('outlook')}
             onScan={() => scan('outlook')}
             busy={busy}
           />
@@ -122,6 +145,53 @@ export function Settings(): JSX.Element {
             </Button>
           )}
         </div>
+
+        {testResult && (
+          <div className="border border-edge rounded-lg p-3 mb-4 bg-panel2/30">
+            <div className="text-sm mb-2">
+              <span className="font-medium capitalize">{testResult.provider}</span> found{' '}
+              <span className="text-brand">{testResult.found}</span> matching emails · nothing imported.
+              <span className="text-muted"> Query: <code className="text-xs">{testResult.query || '(recent)'}</code></span>
+            </div>
+            {testResult.samples.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-muted text-left border-b border-edge">
+                      <th className="py-1 pr-2 font-medium">Date</th>
+                      <th className="py-1 pr-2 font-medium">From</th>
+                      <th className="py-1 pr-2 font-medium">Subject</th>
+                      <th className="py-1 pr-2 font-medium">Att.</th>
+                      <th className="py-1 pl-2 font-medium text-right">Would extract</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {testResult.samples.map((s, i) => (
+                      <tr key={i} className="border-b border-edge/40">
+                        <td className="py-1 pr-2 whitespace-nowrap text-muted">{formatDate(s.date)}</td>
+                        <td className="py-1 pr-2"><Bidi>{s.from}</Bidi></td>
+                        <td className="py-1 pr-2 max-w-[220px] truncate"><Bidi>{s.subject}</Bidi></td>
+                        <td className="py-1 pr-2 text-muted">{s.attachments || '—'}</td>
+                        <td className="py-1 pl-2 text-right">
+                          {s.extractedAmount != null ? (
+                            <span className="text-emerald-400">{formatMoney(s.extractedAmount, s.currency ?? 'ILS')}</span>
+                          ) : (
+                            <span className="text-muted">no amount in body</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="text-xs text-muted mt-2">
+                  “Would extract” previews the body only. Attachments (PDF/images) are parsed during a real scan.
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs text-muted">No emails matched — widen the keywords or look-back window below.</div>
+            )}
+          </div>
+        )}
 
         <EmailSettingsForm
           value={emailSettings}
@@ -212,6 +282,7 @@ function ProviderCard({
   hint,
   onConnect,
   onDisconnect,
+  onTest,
   onScan,
   busy,
 }: {
@@ -221,6 +292,7 @@ function ProviderCard({
   hint: string;
   onConnect: () => void;
   onDisconnect: () => void;
+  onTest: () => void;
   onScan: () => void;
   busy: boolean;
 }): JSX.Element {
@@ -243,6 +315,7 @@ function ProviderCard({
           {!connected && <Button onClick={onConnect}>Connect</Button>}
           {connected && (
             <>
+              <Button variant="subtle" onClick={onTest} disabled={busy}>Test connection</Button>
               <Button onClick={onScan} disabled={busy}>Scan</Button>
               <Button variant="ghost" onClick={onDisconnect}>Disconnect</Button>
             </>

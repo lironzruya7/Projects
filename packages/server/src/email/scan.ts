@@ -172,6 +172,66 @@ export async function runScan(opts?: { providerName?: EmailProviderName; maxResu
   };
 }
 
+export interface EmailTestResult {
+  provider: string;
+  query: string;
+  found: number;
+  samples: Array<{
+    from: string;
+    subject: string;
+    date: string;
+    attachments: number;
+    extractedAmount: number | null;
+    currency: string | null;
+  }>;
+}
+
+/**
+ * Dry-run a provider: search and preview the first few matching emails WITHOUT
+ * importing anything. Lets the user confirm the connection + search settings and
+ * see whether an amount is being extracted. Only the body is parsed here (no
+ * attachment OCR) to keep the test fast.
+ */
+export async function testConnection(opts?: {
+  providerName?: EmailProviderName;
+  maxResults?: number;
+}): Promise<EmailTestResult> {
+  const settings = getSetting<EmailSettings>('email', {
+    keywords: ['invoice', 'receipt', 'order', 'payment', 'חשבונית', 'קבלה', 'תשלום', 'הזמנה'],
+    senderDomains: [],
+    maxResults: 50,
+    lookbackDays: 90,
+  });
+  const provider = getProvider(opts?.providerName);
+  if (!provider.isConfigured()) throw new Error(`Email provider "${provider.name}" is not configured`);
+  if (!(await provider.isConnected())) throw new Error(`Email provider "${provider.name}" is not connected`);
+
+  const query = buildQuery({
+    keywords: settings.keywords,
+    senderDomains: settings.senderDomains,
+    lookbackDays: settings.lookbackDays,
+  });
+  const maxResults = opts?.maxResults ?? 5;
+  const messages = await provider.search(query, maxResults);
+
+  const samples = messages.slice(0, 5).map((msg) => {
+    const r = extractReceipt(`${msg.subject}\n${msg.bodyText}`, {
+      merchant: msg.fromName || msg.from,
+      date: msg.date,
+    });
+    return {
+      from: msg.fromName || msg.from,
+      subject: msg.subject,
+      date: msg.date,
+      attachments: msg.attachments.length,
+      extractedAmount: r.amount && r.amount > 0 ? r.amount : null,
+      currency: r.amount && r.amount > 0 ? r.currency : null,
+    };
+  });
+
+  return { provider: provider.name, query, found: messages.length, samples };
+}
+
 export interface MultiScanResult {
   results: ScanResult[];
   messagesScanned: number;

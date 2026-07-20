@@ -5,7 +5,7 @@ import { getSetting, setSetting } from '../db/db.js';
 import { exchangeCode, getAuthUrl, gmailProvider } from '../email/gmail.js';
 import * as outlook from '../email/outlook.js';
 import { deleteToken, hasToken } from '../email/tokenStore.js';
-import { runScan, scanAll } from '../email/scan.js';
+import { runScan, scanAll, testConnection } from '../email/scan.js';
 
 export async function emailRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/email/status', async () => ({
@@ -80,6 +80,18 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
   app.post('/api/email/outlook/disconnect', async () => {
     deleteToken('outlook');
     return { ok: true };
+  });
+
+  // Dry-run: preview matching emails without importing anything.
+  app.post('/api/email/test', async (req, reply) => {
+    const body = z
+      .object({ provider: z.enum(['gmail', 'outlook', 'imap']).optional(), maxResults: z.number().int().min(1).max(10).optional() })
+      .parse(req.body ?? {});
+    try {
+      return await testConnection({ providerName: body.provider, maxResults: body.maxResults });
+    } catch (err) {
+      return reply.code(400).send({ error: (err as Error).message });
+    }
   });
 
   // Run a scan. With no `provider`, scans every connected account and aggregates.

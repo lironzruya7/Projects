@@ -124,6 +124,20 @@ export interface DoubleChargeAlert {
   b: Transaction | null;
 }
 
+export interface EmailTestResult {
+  provider: string;
+  query: string;
+  found: number;
+  samples: Array<{
+    from: string;
+    subject: string;
+    date: string;
+    attachments: number;
+    extractedAmount: number | null;
+    currency: string | null;
+  }>;
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
@@ -237,6 +251,8 @@ export const api = {
       '/api/email/scan',
       { method: 'POST', body: JSON.stringify(body) },
     ),
+  testEmail: (body: { provider?: 'gmail' | 'outlook' | 'imap' } = {}) =>
+    req<EmailTestResult>('/api/email/test', { method: 'POST', body: JSON.stringify(body) }),
 
   // LLM
   llmStatus: () => req<{ configured: boolean; enabled: boolean; note: string }>('/api/llm/status'),
