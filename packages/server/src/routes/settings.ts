@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getDb, getSetting, setSetting } from '../db/db.js';
 import { queryLedger } from '../repo/transactions.js';
 import { DedupSettings } from '../models/types.js';
+import { buildReport, renderReportHtml, renderReportMarkdown } from '../insights/report.js';
 
 export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/settings', async () => ({
@@ -47,6 +48,38 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // --- Data export ---
+  // Full month-by-month financial report (dashboard + income/expenses + recurring
+  // + recommendations + transactions). Markdown is ideal to hand to another AI;
+  // HTML and PDF are the tidy human/printable versions.
+  app.get('/api/export/report.md', async (_req, reply) => {
+    const report = buildReport(new Date().toISOString().slice(0, 10));
+    reply.header('content-disposition', 'attachment; filename="finance-report.md"');
+    reply.type('text/markdown; charset=utf-8');
+    return renderReportMarkdown(report);
+  });
+
+  app.get('/api/export/report.html', async (_req, reply) => {
+    const report = buildReport(new Date().toISOString().slice(0, 10));
+    reply.type('text/html; charset=utf-8');
+    return renderReportHtml(report);
+  });
+
+  app.get('/api/export/report.pdf', async (_req, reply) => {
+    const report = buildReport(new Date().toISOString().slice(0, 10));
+    const html = renderReportHtml(report);
+    try {
+      const { htmlToPdf } = await import('../insights/reportPdf.js');
+      const pdf = await htmlToPdf(html);
+      reply.header('content-disposition', `attachment; filename="finance-report-${report.range.min}_${report.range.max}.pdf"`);
+      reply.type('application/pdf');
+      return reply.send(pdf);
+    } catch (err) {
+      // Chromium unavailable — fall back to the HTML the browser can print to PDF.
+      reply.code(503).type('application/json');
+      return { error: `PDF rendering failed (${(err as Error).message}). Use the HTML/Markdown report instead.` };
+    }
+  });
+
   app.get('/api/export/json', async (_req, reply) => {
     const entries = queryLedger({ limit: 100000 });
     reply.header('content-disposition', 'attachment; filename="finance-export.json"');

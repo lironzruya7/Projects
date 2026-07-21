@@ -284,6 +284,20 @@ export function Settings(): JSX.Element {
         />
       </Card>
 
+      {/* Financial report */}
+      <Card>
+        <h3 className="font-medium mb-1">Financial report</h3>
+        <p className="text-xs text-muted mb-3">
+          A full month-by-month report — income, expenses, categories, recurring subscriptions, recommendations and every
+          transaction. The <b>Markdown</b> version is ideal to hand to another AI for analysis; <b>PDF</b> is the tidy printable one.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <a href="/api/export/report.pdf" target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm bg-brand text-white hover:opacity-90">📄 Report PDF</a>
+          <a href="/api/export/report.md" className="px-3 py-1.5 rounded-lg text-sm bg-panel2 hover:bg-edge">🤖 Report for AI (Markdown)</a>
+          <a href="/api/export/report.html" target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm bg-panel2 hover:bg-edge">🌐 Report HTML</a>
+        </div>
+      </Card>
+
       {/* Data */}
       <Card>
         <h3 className="font-medium mb-3">Your data</h3>
