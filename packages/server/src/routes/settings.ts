@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getDb, getSetting, setSetting } from '../db/db.js';
 import { queryLedger } from '../repo/transactions.js';
 import { DedupSettings } from '../models/types.js';
-import { buildReport, renderReportHtml, renderReportMarkdown } from '../insights/report.js';
+import { buildReport, renderReportHtml, renderReportJson, renderReportMarkdown } from '../insights/report.js';
 
 export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/settings', async () => ({
@@ -80,11 +80,17 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.get('/api/export/json', async (_req, reply) => {
-    const entries = queryLedger({ limit: 100000 });
-    reply.header('content-disposition', 'attachment; filename="finance-export.json"');
-    reply.type('application/json');
-    return { exportedAt: new Date().toISOString(), count: entries.length, transactions: entries };
+  // Comprehensive, organized JSON for an AI agent: metadata, overview,
+  // recommendations, recurring, service groups, per-month breakdowns, and every
+  // transaction. (Raw flat ledger is available via ?flat=1.)
+  app.get('/api/export/json', async (req, reply) => {
+    reply.header('content-disposition', 'attachment; filename="finance-report.json"');
+    reply.type('application/json; charset=utf-8');
+    if ((req.query as { flat?: string }).flat) {
+      const entries = queryLedger({ limit: 100000 });
+      return { exportedAt: new Date().toISOString(), count: entries.length, transactions: entries };
+    }
+    return renderReportJson(buildReport(new Date().toISOString().slice(0, 10)));
   });
 
   app.get('/api/export/csv', async (_req, reply) => {

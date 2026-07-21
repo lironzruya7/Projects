@@ -293,16 +293,18 @@ export function Settings(): JSX.Element {
         </p>
         <div className="flex flex-wrap gap-2">
           <a href="/api/export/report.pdf" target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm bg-brand text-white hover:opacity-90">📄 Report PDF</a>
-          <a href="/api/export/report.md" className="px-3 py-1.5 rounded-lg text-sm bg-panel2 hover:bg-edge">🤖 Report for AI (Markdown)</a>
-          <a href="/api/export/report.html" target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm bg-panel2 hover:bg-edge">🌐 Report HTML</a>
+          <a href="/api/export/report.md" className="px-3 py-1.5 rounded-lg text-sm bg-panel2 hover:bg-edge">🤖 For AI (Markdown)</a>
+          <a href="/api/export/json" className="px-3 py-1.5 rounded-lg text-sm bg-panel2 hover:bg-edge">🤖 For AI (JSON)</a>
+          <a href="/api/export/report.html" target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm bg-panel2 hover:bg-edge">🌐 HTML</a>
         </div>
       </Card>
 
       {/* Data */}
       <Card>
-        <h3 className="font-medium mb-3">Your data</h3>
+        <h3 className="font-medium mb-1">Raw data</h3>
+        <p className="text-xs text-muted mb-3">Plain transaction dumps (the full organized report is above).</p>
         <div className="flex flex-wrap gap-2">
-          <a href="/api/export/json" className="px-3 py-1.5 rounded-lg text-sm bg-panel2 hover:bg-edge">Export JSON</a>
+          <a href="/api/export/json?flat=1" className="px-3 py-1.5 rounded-lg text-sm bg-panel2 hover:bg-edge">Transactions JSON</a>
           <a href="/api/export/csv" className="px-3 py-1.5 rounded-lg text-sm bg-panel2 hover:bg-edge">Export CSV</a>
           <Button
             variant="danger"

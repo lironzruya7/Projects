@@ -83,6 +83,87 @@ function acctLabel(a: { provider: string | null; accountLabel: string | null; so
   return a.accountLabel ? `${base} ••${a.accountLabel}` : base;
 }
 
+// ---------- JSON (structured, for an AI agent) ----------
+
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+function compactTxn(t: LedgerEntry): Record<string, unknown> {
+  return {
+    date: t.date,
+    merchant: t.merchantRaw,
+    amount: round2(t.amount),
+    currency: t.currency,
+    direction: t.amount < 0 ? 'out' : 'in',
+    category: t.category ?? null,
+    sourceType: t.sourceType,
+    provider: t.sourceProvider ?? null,
+    card: t.accountLabel ?? null,
+    mergedFrom: t.sourceCount > 1 ? t.sourceTypes : undefined,
+  };
+}
+
+/** The whole report as one organized JSON object, ideal for an AI agent to parse. */
+export function renderReportJson(r: FullReport): Record<string, unknown> {
+  const c = r.currency;
+  const totalIncome = r.months.reduce((s, m) => s + m.income.total, 0);
+  const totalSpend = r.months.reduce((s, m) => s + m.spend, 0);
+  const allTransactions = r.months.flatMap((m) => m.transactions).map(compactTxn);
+
+  return {
+    meta: {
+      schema: 'finance-report/1',
+      generatedAt: r.generatedFor,
+      currency: c,
+      period: r.range,
+      monthsCovered: r.months.length,
+      notes:
+        'Amounts are signed (negative = spend, positive = income). Salary paid at a month boundary is counted in the nearest month. Bank credit-card settlement lines are categorized Transfers and excluded from income/spend to avoid double-counting the itemized card charges.',
+    },
+    overview: {
+      totalIncome: round2(totalIncome),
+      totalSpend: round2(totalSpend),
+      net: round2(totalIncome - totalSpend),
+      avgMonthlySpend: round2(r.recommendations.totalMonthlySpend),
+      recurringMonthly: round2(r.recommendations.recurringMonthly),
+      recurringAnnual: round2(r.recommendations.recurringAnnual),
+      potentialMonthlySavings: round2(r.recommendations.potentialMonthlySavings),
+    },
+    recommendations: r.recommendations.recommendations.map((rec) => ({
+      kind: rec.kind,
+      title: rec.title,
+      detail: rec.detail,
+      monthlySaving: round2(rec.monthlySaving),
+    })),
+    serviceGroups: r.recommendations.serviceGroups.map((g) => ({
+      type: g.label,
+      monthlyCost: round2(g.monthlyCost),
+      overlapping: g.overlapping,
+      consolidatable: g.saveable,
+      merchants: g.merchants.map((m) => ({ merchant: m.merchant, monthlyCost: round2(m.monthlyCost), charges: m.count })),
+    })),
+    recurringSubscriptions: r.recurring.map((s) => ({
+      merchant: s.merchant,
+      monthlyCost: round2(s.monthlyCost),
+      annualCost: round2(s.annualCost),
+      everyDays: s.intervalDays,
+      category: s.category ?? null,
+      lastCharge: s.lastDate,
+      nextExpected: s.nextExpected,
+    })),
+    months: r.months.map((m) => ({
+      month: m.month,
+      income: { total: round2(m.income.total), salary: round2(m.income.salary), other: round2(m.income.other) },
+      spend: round2(m.spend),
+      net: round2(m.net),
+      byCategory: m.categories.map((x) => ({ category: x.category, amount: round2(x.amount), count: x.count })),
+      byAccount: m.byAccount.map((a) => ({ account: acctLabel(a), amount: round2(a.amount) })),
+      topMerchants: m.topMerchants.map((x) => ({ merchant: x.merchant, amount: round2(x.amount), count: x.count })),
+      transactions: m.transactions.map(compactTxn),
+    })),
+    allTransactions,
+  };
+}
+
 // ---------- Markdown (best for feeding to another AI) ----------
 
 export function renderReportMarkdown(r: FullReport): string {
