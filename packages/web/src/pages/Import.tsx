@@ -3,6 +3,7 @@ import type { AmountMode, ColumnMapping, ImportPreview } from '../api/client';
 import { api } from '../api/client';
 import { Badge, Bidi, Button, Card, Spinner } from '../components/ui';
 import { ReconcileCard } from '../components/ReconcileCard';
+import { CARD_PROVIDERS } from '../lib/accounts';
 import { formatDate } from '../lib/format';
 
 interface UploadState {
@@ -36,7 +37,7 @@ export function ImportPage(): JSX.Element {
   const bankFilesRef = useRef<HTMLInputElement>(null);
   const [autoBusy, setAutoBusy] = useState(false);
   const [autoResults, setAutoResults] = useState<Awaited<ReturnType<typeof api.autoImport>> | null>(null);
-  const [cardStaged, setCardStaged] = useState<Array<{ file: File; label: string }> | null>(null);
+  const [cardStaged, setCardStaged] = useState<Array<{ file: File; label: string; provider: string }> | null>(null);
 
   // Mapping form state
   const [mapping, setMapping] = useState<ColumnMapping>({});
@@ -127,7 +128,7 @@ export function ImportPage(): JSX.Element {
   // (blank => the server auto-detects a last-4), then imported together.
   function stageCardFiles(files: FileList | null): void {
     if (!files || files.length === 0) return;
-    setCardStaged(Array.from(files).map((f) => ({ file: f, label: '' })));
+    setCardStaged(Array.from(files).map((f) => ({ file: f, label: '', provider: '' })));
     setAutoResults(null);
     setError(null);
   }
@@ -212,16 +213,30 @@ export function ImportPage(): JSX.Element {
         <Card style={{ background: 'linear-gradient(135deg, #c084fc14, transparent 60%)' }}>
           <div className="font-medium mb-1">💳 Tag each card ({cardStaged.length} file{cardStaged.length > 1 ? 's' : ''})</div>
           <p className="text-xs text-muted mb-3">
-            So two cards of the same company don't get mixed up. Leave blank to auto-detect the last 4 digits from the file.
+            Pick the card type (Diners looks like Cal to auto-detect) and its last 4 digits, so cards don't get mixed up.
+            Leave a field on Auto/blank to detect it from the file.
           </p>
           <div className="space-y-2">
             {cardStaged.map((s, i) => (
               <div key={i} className="flex items-center gap-2">
-                <Bidi className="truncate flex-1 text-sm">{s.file.name}</Bidi>
+                <Bidi className="truncate flex-1 text-sm min-w-0">{s.file.name}</Bidi>
+                <select
+                  className="input w-28 shrink-0"
+                  value={s.provider}
+                  onChange={(e) =>
+                    setCardStaged((prev) => prev!.map((x, j) => (j === i ? { ...x, provider: e.target.value } : x)))
+                  }
+                >
+                  {CARD_PROVIDERS.map((p) => (
+                    <option key={p.value} value={p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
                 <input
-                  className="input w-36 shrink-0"
+                  className="input w-24 shrink-0"
                   inputMode="numeric"
-                  placeholder="card # / nickname"
+                  placeholder="last 4"
                   value={s.label}
                   onChange={(e) =>
                     setCardStaged((prev) => prev!.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))
@@ -508,10 +523,40 @@ export function ImportPage(): JSX.Element {
                   <Badge tone={b.source_type === 'bank' ? 'bank' : b.source_type === 'card' ? 'card' : 'email'}>
                     {b.source_type}
                   </Badge>
-                  {(b.source_provider || b.account_label) && (
-                    <Badge tone="card">
-                      {b.source_provider ?? ''}{b.account_label ? ` ••${b.account_label}` : ''}
-                    </Badge>
+                  {b.source_type === 'card' ? (
+                    <span className="flex items-center gap-1">
+                      <select
+                        className="input !py-0.5 !px-1 text-xs w-24"
+                        value={b.source_provider ?? ''}
+                        disabled={busy}
+                        onChange={async (e) => {
+                          setBusy(true);
+                          setError(null);
+                          try {
+                            await api.setBatchProvider(b.id, e.target.value);
+                            setHistoryMsg('Card type updated.');
+                            await loadBatches();
+                          } catch (err) {
+                            setError((err as Error).message);
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      >
+                        {CARD_PROVIDERS.filter((p) => p.value).map((p) => (
+                          <option key={p.value} value={p.value}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </select>
+                      {b.account_label && <span className="text-muted text-xs">••{b.account_label}</span>}
+                    </span>
+                  ) : (
+                    (b.source_provider || b.account_label) && (
+                      <Badge tone="card">
+                        {b.source_provider ?? ''}{b.account_label ? ` ••${b.account_label}` : ''}
+                      </Badge>
+                    )
                   )}
                   <span>{b.filename ?? b.note}</span>
                   <span className="text-muted text-xs">{b.row_count} rows · {formatDate((b.created_at ?? '').slice(0, 10))}</span>

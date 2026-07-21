@@ -44,6 +44,17 @@ export function setBatchRowCount(id: string, count: number): void {
   getDb().prepare(`UPDATE import_batches SET row_count = ? WHERE id = ?`).run(count, id);
 }
 
+/** Change a batch's card type and cascade it to all its transactions. Returns rows updated. */
+export function setBatchProvider(id: string, provider: string | null): number {
+  const db = getDb();
+  const p = provider && provider.trim() ? provider.trim().toLowerCase() : null;
+  const tx = db.transaction(() => {
+    db.prepare(`UPDATE import_batches SET source_provider = ? WHERE id = ?`).run(p, id);
+    return db.prepare(`UPDATE transactions SET source_provider = ? WHERE import_batch = ?`).run(p, id).changes;
+  });
+  return tx();
+}
+
 export function listBatches(): ImportBatch[] {
   return getDb().prepare(`SELECT * FROM import_batches ORDER BY created_at DESC`).all() as ImportBatch[];
 }

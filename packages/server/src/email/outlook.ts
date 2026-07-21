@@ -69,10 +69,18 @@ async function accessToken(): Promise<string | null> {
   return merged.access_token;
 }
 
-/** Translate the shared (Gmail-style) query string into a Graph $search KQL string. */
+/**
+ * Translate the shared (Gmail-style) query string into a Graph KQL expression.
+ * Single words go in bare; only multi-word phrases get quoted. The whole
+ * expression is wrapped in ONE pair of quotes by the caller — do NOT quote here
+ * or Graph rejects the doubly-quoted `$search` with a 400.
+ */
 function toKql(query: string): string {
   const terms: string[] = [];
-  for (const m of query.matchAll(/"([^"]+)"/g)) terms.push(`"${m[1]}"`);
+  for (const m of query.matchAll(/"([^"]+)"/g)) {
+    const t = m[1]!.trim();
+    if (t) terms.push(/\s/.test(t) ? `"${t}"` : t);
+  }
   for (const m of query.matchAll(/from:(\S+)/g)) terms.push(`from:${m[1]}`);
   return terms.join(' OR ');
 }
@@ -98,6 +106,7 @@ export const outlookProvider: EmailProvider = {
     const url = new URL(`${GRAPH}/me/messages`);
     url.searchParams.set('$top', String(Math.min(maxResults, 100)));
     url.searchParams.set('$select', 'id,subject,from,receivedDateTime,body,hasAttachments');
+    // $search can't be combined with $orderby on Graph; use one or the other.
     if (kql) url.searchParams.set('$search', `"${kql}"`);
     else url.searchParams.set('$orderby', 'receivedDateTime desc');
 
@@ -106,6 +115,8 @@ export const outlookProvider: EmailProvider = {
         authorization: `Bearer ${token}`,
         // Ask Graph to return the body as plain text so we skip HTML parsing.
         Prefer: 'outlook.body-content-type="text"',
+        // Required for $search on message collections.
+        ConsistencyLevel: 'eventual',
       },
     });
     if (!res.ok) {

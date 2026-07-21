@@ -62,18 +62,25 @@ export async function autoParseFile(
   filename: string,
   sourceType: 'bank' | 'card',
   accountLabel?: string | null,
+  providerOverride?: string | null,
 ): Promise<AutoParseResult> {
   // Prefer the user-supplied label; otherwise try to detect a card last-4.
   const label = (accountLabel ?? '').trim() || detectCardLabel(buf, filename);
-  const stamp = (rows: ParsedTransaction[]): ParsedTransaction[] =>
-    label ? rows.map((p) => ({ ...p, accountLabel: p.accountLabel ?? label })) : rows;
+  const override = (providerOverride ?? '').trim().toLowerCase() || null;
+  const stamp = (rows: ParsedTransaction[], provider: string | null): ParsedTransaction[] =>
+    rows.map((p) => ({
+      ...p,
+      accountLabel: p.accountLabel ?? label,
+      sourceProvider: provider ?? p.sourceProvider ?? null,
+    }));
 
   if (isPdf(buf, filename)) {
     const r = await parsePdfStatement(buf, filename, { sourceType });
+    const provider = override ?? null;
     return {
-      parsed: stamp(r.parsed),
+      parsed: stamp(r.parsed, provider),
       skipped: r.skipped,
-      provider: null,
+      provider,
       accountLabel: label,
       format: 'pdf',
       needsManual: r.parsed.length === 0,
@@ -83,7 +90,9 @@ export async function autoParseFile(
 
   const preview = buildPreview(buf, filename);
   const remembered = getMapping(preview.signature);
-  const provider = remembered?.provider ?? preview.suggestion.provider;
+  // A user-picked card type wins over auto-detected provider (handles cards we
+  // don't fingerprint, e.g. Diners / Max / Amex).
+  const provider = override ?? remembered?.provider ?? preview.suggestion.provider;
 
   let amountMode = remembered?.amountMode ?? preview.suggestion.amountMode;
   // In card mode, a single positive "amount / סכום חיוב" column means charges,
@@ -110,7 +119,7 @@ export async function autoParseFile(
 
   const result = applyMapping(buf, filename, cfg);
   return {
-    parsed: stamp(result.parsed),
+    parsed: stamp(result.parsed, provider ?? null),
     skipped: result.skipped.length,
     provider: provider ?? null,
     accountLabel: label,

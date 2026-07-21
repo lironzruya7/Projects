@@ -5,7 +5,7 @@ import { applyMapping, buildPreview, fingerprint } from '../parsers/fileImport.j
 import { autoParseFile } from '../parsers/autoImport.js';
 import { readGrid } from '../parsers/tabular.js';
 import { getMapping, listMappings, saveMapping } from '../repo/mappings.js';
-import { createBatch, deleteBatch, deleteBatchesBySource, listBatches, setBatchRowCount } from '../repo/batches.js';
+import { createBatch, deleteBatch, deleteBatchesBySource, listBatches, setBatchProvider, setBatchRowCount } from '../repo/batches.js';
 import { insertParsed } from '../repo/transactions.js';
 import { runDedup } from '../dedup/engine.js';
 import { getUpload, putUpload } from '../util/uploadCache.js';
@@ -95,17 +95,21 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
     // immediately before its `file`, so we carry the latest label onto the next
     // file (blank => the parser auto-detects a card last-4).
     let pendingLabel: string | null = null;
+    let pendingProvider: string | null = null;
     for await (const part of req.parts()) {
       if (part.type === 'field') {
         if (part.fieldname === 'label') pendingLabel = String(part.value ?? '').trim() || null;
+        if (part.fieldname === 'provider') pendingProvider = String(part.value ?? '').trim() || null;
         continue;
       }
       const file = part;
       const buf = await file.toBuffer();
       const label = pendingLabel;
+      const providerOverride = pendingProvider;
       pendingLabel = null;
+      pendingProvider = null;
       try {
-        const r = await autoParseFile(buf, file.filename, sourceType, label);
+        const r = await autoParseFile(buf, file.filename, sourceType, label, providerOverride);
         let imported = 0;
         if (r.parsed.length > 0) {
           const batchId = createBatch({
@@ -138,6 +142,14 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/import/batches', async () => ({ batches: listBatches() }));
+
+  // Relabel a batch's card type (e.g. a Diners card that imported as Cal).
+  app.put('/api/import/batches/:id/provider', async (req) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({ provider: z.string() }).parse(req.body);
+    const updated = setBatchProvider(id, body.provider);
+    return { ok: true, updated };
+  });
 
   app.delete('/api/import/batches/:id', async (req) => {
     const { id } = req.params as { id: string };

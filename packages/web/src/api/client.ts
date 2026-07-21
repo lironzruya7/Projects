@@ -192,16 +192,17 @@ export const api = {
       { method: 'POST', body: JSON.stringify(body) },
     ),
   autoImport: async (
-    files: Array<{ file: File; label?: string }> | FileList | File[],
+    files: Array<{ file: File; label?: string; provider?: string }> | FileList | File[],
     sourceType: 'card' | 'bank',
   ) => {
     const fd = new FormData();
     const items = Array.from(files as ArrayLike<unknown>).map((f) =>
-      f instanceof File ? { file: f, label: '' } : (f as { file: File; label?: string }),
+      f instanceof File ? { file: f, label: '', provider: '' } : (f as { file: File; label?: string; provider?: string }),
     );
-    // Send each label field immediately before its file so the server can pair them.
-    for (const { file, label } of items) {
+    // Send label + provider fields immediately before each file so the server pairs them.
+    for (const { file, label, provider } of items) {
       fd.append('label', label ?? '');
+      fd.append('provider', provider ?? '');
       fd.append('file', file);
     }
     const res = await fetch(`/api/import/auto?sourceType=${sourceType}`, { method: 'POST', body: fd });
@@ -362,6 +363,13 @@ export const api = {
       '/api/scrape/run',
       { method: 'POST', body: JSON.stringify({ provider, months }) },
     ),
+
+  // Relabel a card's type for already-imported data (e.g. a Cal-format Diners card).
+  setBatchProvider: (id: string, provider: string) =>
+    req<{ ok: boolean; updated: number }>(`/api/import/batches/${id}/provider`, {
+      method: 'PUT',
+      body: JSON.stringify({ provider }),
+    }),
 
   // Credit-card reconciliation (bank settlement line ↔ itemized card charges)
   reconcile: () =>

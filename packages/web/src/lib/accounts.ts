@@ -4,6 +4,7 @@ const LABELS: Record<string, string> = {
   yahav: 'Yahav',
   isracard: 'Isracard',
   cal: 'Cal',
+  diners: 'Diners',
   max: 'Max',
   amex: 'Amex',
   gmail: 'Gmail',
@@ -16,6 +17,7 @@ const COLORS: Record<string, string> = {
   yahav: '#38bdf8',
   isracard: '#c084fc',
   cal: '#f472b6',
+  diners: '#2dd4bf',
   max: '#f59e0b',
   amex: '#22d3ee',
   gmail: '#fb7185',
@@ -23,6 +25,16 @@ const COLORS: Record<string, string> = {
   imap: '#fbbf24',
   photo: '#4ade80',
 };
+
+/** Card types the user can pick per file (auto-detection can't tell Diners from Cal). */
+export const CARD_PROVIDERS: Array<{ value: string; label: string }> = [
+  { value: '', label: 'Auto-detect' },
+  { value: 'isracard', label: 'Isracard' },
+  { value: 'cal', label: 'Cal / Visa Cal' },
+  { value: 'diners', label: 'Diners' },
+  { value: 'max', label: 'Max' },
+  { value: 'amex', label: 'American Express' },
+];
 
 const SOURCE_LABEL: Record<string, string> = { bank: 'Bank', card: 'Card', email: 'Email', receipt: 'Receipt' };
 const SOURCE_COLOR: Record<string, string> = { bank: '#38bdf8', card: '#c084fc', email: '#fbbf24', receipt: '#4ade80' };
