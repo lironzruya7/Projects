@@ -6,6 +6,8 @@ export interface ImportBatch {
   source_type: string;
   source_provider: string | null;
   account_label: string | null;
+  file_hash: string | null;
+  period: string | null;
   filename: string | null;
   signature: string | null;
   row_count: number;
@@ -17,6 +19,8 @@ export function createBatch(input: {
   sourceType: string;
   sourceProvider?: string | null;
   accountLabel?: string | null;
+  fileHash?: string | null;
+  period?: string | null;
   filename?: string | null;
   signature?: string | null;
   note?: string | null;
@@ -24,20 +28,33 @@ export function createBatch(input: {
   const id = randomUUID();
   getDb()
     .prepare(
-      `INSERT INTO import_batches (id, source_type, source_provider, account_label, filename, signature, row_count, note, created_at)
-       VALUES (@id, @source_type, @source_provider, @account_label, @filename, @signature, 0, @note, @created_at)`,
+      `INSERT INTO import_batches (id, source_type, source_provider, account_label, file_hash, period, filename, signature, row_count, note, created_at)
+       VALUES (@id, @source_type, @source_provider, @account_label, @file_hash, @period, @filename, @signature, 0, @note, @created_at)`,
     )
     .run({
       id,
       source_type: input.sourceType,
       source_provider: input.sourceProvider ?? null,
       account_label: input.accountLabel ?? null,
+      file_hash: input.fileHash ?? null,
+      period: input.period ?? null,
       filename: input.filename ?? null,
       signature: input.signature ?? null,
       note: input.note ?? null,
       created_at: nowIso(),
     });
   return id;
+}
+
+/** Find an existing batch with the same file content (duplicate upload). */
+export function findBatchByHash(fileHash: string): ImportBatch | undefined {
+  return getDb().prepare(`SELECT * FROM import_batches WHERE file_hash = ?`).get(fileHash) as ImportBatch | undefined;
+}
+
+/** Set a card batch's billing/spending month (YYYY-MM) and cascade to nothing else. */
+export function setBatchPeriod(id: string, period: string | null): void {
+  const p = period && /^\d{4}-\d{2}$/.test(period.trim()) ? period.trim() : null;
+  getDb().prepare(`UPDATE import_batches SET period = ? WHERE id = ?`).run(p, id);
 }
 
 export function setBatchRowCount(id: string, count: number): void {

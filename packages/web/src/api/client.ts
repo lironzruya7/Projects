@@ -235,6 +235,8 @@ export const api = {
         format?: string;
         provider?: string | null;
         accountLabel?: string | null;
+        period?: string | null;
+        duplicate?: boolean;
         imported?: number;
         skipped?: number;
         needsManual?: boolean;
@@ -399,6 +401,8 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ provider }),
     }),
+  setBatchPeriod: (id: string, period: string) =>
+    req<{ ok: boolean }>(`/api/import/batches/${id}/period`, { method: 'PUT', body: JSON.stringify({ period }) }),
 
   // Credit-card reconciliation (bank settlement line ↔ itemized card charges)
   reconcile: () =>

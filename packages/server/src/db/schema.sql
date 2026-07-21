@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS import_batches (
   source_type   TEXT NOT NULL,            -- 'email' | 'bank' | 'card'
   source_provider TEXT,                   -- 'yahav' | 'isracard' | 'cal' | 'gmail' | ...
   account_label TEXT,                     -- card/account tag, e.g. last-4 "1234" (distinguishes 2 cards of same provider)
+  file_hash     TEXT,                     -- sha256 of the uploaded file (duplicate-upload detection)
+  period        TEXT,                     -- YYYY-MM billing/spending month for card files
   filename      TEXT,
   signature     TEXT,                     -- header fingerprint for files
   row_count     INTEGER NOT NULL DEFAULT 0,

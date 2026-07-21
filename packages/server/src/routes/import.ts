@@ -5,7 +5,8 @@ import { applyMapping, buildPreview, fingerprint } from '../parsers/fileImport.j
 import { autoParseFile } from '../parsers/autoImport.js';
 import { readGrid } from '../parsers/tabular.js';
 import { getMapping, listMappings, saveMapping } from '../repo/mappings.js';
-import { createBatch, deleteBatch, deleteBatchesBySource, listBatches, setBatchProvider, setBatchRowCount } from '../repo/batches.js';
+import { createHash } from 'node:crypto';
+import { createBatch, deleteBatch, deleteBatchesBySource, findBatchByHash, listBatches, setBatchPeriod, setBatchProvider, setBatchRowCount } from '../repo/batches.js';
 import { insertParsed } from '../repo/transactions.js';
 import { runDedup } from '../dedup/engine.js';
 import { getUpload, putUpload } from '../util/uploadCache.js';
@@ -109,13 +110,29 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
       pendingLabel = null;
       pendingProvider = null;
       try {
+        // Duplicate-upload guard: the exact same file was already imported.
+        const fileHash = createHash('sha256').update(buf).digest('hex');
+        const existing = findBatchByHash(fileHash);
+        if (existing) {
+          results.push({
+            filename: file.filename,
+            duplicate: true,
+            imported: 0,
+            detail: `Already imported${existing.filename ? ` as "${existing.filename}"` : ''}${existing.period ? ` (${existing.period})` : ''} — skipped.`,
+          });
+          continue;
+        }
         const r = await autoParseFile(buf, file.filename, sourceType, label, providerOverride);
         let imported = 0;
+        let period: string | null = null;
         if (r.parsed.length > 0) {
+          period = dominantMonth(r.parsed.map((p) => p.date));
           const batchId = createBatch({
             sourceType,
             sourceProvider: r.provider,
             accountLabel: r.accountLabel,
+            fileHash,
+            period,
             filename: file.filename,
             note: `Auto import (${r.format})`,
           });
@@ -128,6 +145,7 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
           format: r.format,
           provider: r.provider,
           accountLabel: r.accountLabel,
+          period,
           imported,
           skipped: r.skipped,
           needsManual: r.needsManual,
@@ -151,6 +169,14 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true, updated };
   });
 
+  // Set which billing month a card file belongs to (YYYY-MM), when auto-detection got it wrong.
+  app.put('/api/import/batches/:id/period', async (req) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({ period: z.string() }).parse(req.body);
+    setBatchPeriod(id, body.period);
+    return { ok: true };
+  });
+
   app.delete('/api/import/batches/:id', async (req) => {
     const { id } = req.params as { id: string };
     deleteBatch(id);
@@ -167,4 +193,17 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/import/mappings', async () => ({ mappings: listMappings() }));
+}
+
+/** Most common YYYY-MM among a set of ISO dates (the file's dominant month). */
+function dominantMonth(dates: string[]): string | null {
+  const counts = new Map<string, number>();
+  for (const d of dates) {
+    const m = (d ?? '').slice(0, 7);
+    if (/^\d{4}-\d{2}$/.test(m)) counts.set(m, (counts.get(m) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let n = -1;
+  for (const [m, c] of counts) if (c > n) { n = c; best = m; }
+  return best;
 }

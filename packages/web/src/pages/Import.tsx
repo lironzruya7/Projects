@@ -271,10 +271,13 @@ export function ImportPage(): JSX.Element {
                   <Badge tone={r.format === 'pdf' ? 'warn' : 'default'}>{r.format ?? 'file'}</Badge>
                   <Bidi className="truncate">{r.filename}</Bidi>
                   {r.provider && <Badge tone="card">{r.provider}{r.accountLabel ? ` ••${r.accountLabel}` : ''}</Badge>}
+                  {r.period && <span className="text-[10px] text-muted">{r.period}</span>}
                 </div>
                 <div className="text-xs whitespace-nowrap">
                   {r.error ? (
                     <span className="text-rose-400">{r.error}</span>
+                  ) : r.duplicate ? (
+                    <span className="text-amber-300">⊘ duplicate — skipped</span>
                   ) : r.needsManual ? (
                     <span className="text-amber-300">needs manual mapping</span>
                   ) : (
@@ -558,7 +561,30 @@ export function ImportPage(): JSX.Element {
                       </Badge>
                     )
                   )}
-                  <span>{b.filename ?? b.note}</span>
+                  {b.source_type === 'card' && (
+                    <input
+                      type="month"
+                      style={{ colorScheme: 'dark' }}
+                      className="input !py-0.5 !px-1 text-xs w-28"
+                      title="Billing month of this file"
+                      defaultValue={b.period ?? ''}
+                      disabled={busy}
+                      onChange={async (e) => {
+                        setBusy(true);
+                        setError(null);
+                        try {
+                          await api.setBatchPeriod(b.id, e.target.value);
+                          setHistoryMsg('Month updated.');
+                          await loadBatches();
+                        } catch (err) {
+                          setError((err as Error).message);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    />
+                  )}
+                  <span className="truncate">{b.filename ?? b.note}</span>
                   <span className="text-muted text-xs">{b.row_count} rows · {formatDate((b.created_at ?? '').slice(0, 10))}</span>
                 </div>
                 <Button

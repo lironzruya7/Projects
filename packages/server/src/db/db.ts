@@ -35,6 +35,8 @@ function migrate(db: Database.Database): void {
   };
   addColumn('transactions', 'account_label', 'TEXT');
   addColumn('import_batches', 'account_label', 'TEXT');
+  addColumn('import_batches', 'file_hash', 'TEXT'); // sha256 of the uploaded file, for duplicate-upload detection
+  addColumn('import_batches', 'period', 'TEXT'); // YYYY-MM billing/spending month for card files
 }
 
 export function nowIso(): string {
