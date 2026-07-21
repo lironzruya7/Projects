@@ -117,19 +117,41 @@ export function isSalary(t: Transaction): boolean {
 }
 
 /**
+ * A salary is paid on the 1st but can land a day or two off (holidays/weekends).
+ * Snap a salary dated within two days of a month boundary to that month's 1st,
+ * so it shows in the right month everywhere (ledger list, totals, report).
+ * e.g. 30/06 → 01/07, 02/07 → 01/07. Mid-month dates are left untouched.
+ */
+export function salaryEffectiveDate(iso: string): string {
+  const d = new Date(iso + 'T00:00:00Z');
+  if (Number.isNaN(d.getTime())) return iso;
+  const day = d.getUTCDate();
+  const daysInMonth = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  if (day >= daysInMonth - 1) return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
+  if (day <= 3) return `${iso.slice(0, 7)}-01`;
+  return iso;
+}
+
+/**
  * Tag incoming salaries with the `Salary` category (kept separate from other
- * income). Never overrides a manual choice. Idempotent.
+ * income) and snap boundary dates to the 1st of the nearest month. Never
+ * overrides a manual choice. Idempotent.
  */
 export function applySalaryCategory(): number {
   const db = getDb();
-  const credits = allPrimary().filter((t) => t.sourceType === 'bank' && t.amount > 0);
+  const credits = allPrimary().filter((t) => t.sourceType === 'bank' && t.amount > 0 && isSalary(t));
   const upd = db.prepare(
-    `UPDATE transactions SET category = 'Salary', category_source = 'rule'
-     WHERE id = ? AND category_source != 'manual' AND (category IS NULL OR category = 'Income' OR category != 'Salary')`,
+    `UPDATE transactions SET category = 'Salary', category_source = 'rule', date = ?
+     WHERE id = ? AND category_source != 'manual'`,
   );
   let changed = 0;
   const tx = db.transaction(() => {
-    for (const t of credits) if (isSalary(t)) changed += upd.run(t.id).changes;
+    for (const t of credits) {
+      const newDate = salaryEffectiveDate(t.date);
+      const needs = t.category !== 'Salary' || t.date !== newDate;
+      const res = upd.run(newDate, t.id);
+      if (res.changes && needs) changed++;
+    }
   });
   tx();
   return changed;
