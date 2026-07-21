@@ -144,6 +144,26 @@ export function Transactions(): JSX.Element {
               ))}
             </select>
           )}
+          <label className="flex items-center gap-1 text-xs text-muted">
+            from
+            <input
+              type="date"
+              style={{ colorScheme: 'dark' }}
+              className="bg-panel2 border border-edge rounded-lg px-2 py-1.5 text-sm text-ink"
+              value={filters.from ?? ''}
+              onChange={(e) => setFilter('from', e.target.value || undefined)}
+            />
+          </label>
+          <label className="flex items-center gap-1 text-xs text-muted">
+            to
+            <input
+              type="date"
+              style={{ colorScheme: 'dark' }}
+              className="bg-panel2 border border-edge rounded-lg px-2 py-1.5 text-sm text-ink"
+              value={filters.to ?? ''}
+              onChange={(e) => setFilter('to', e.target.value || undefined)}
+            />
+          </label>
           {activeFilters.length > 0 && (
             <Button variant="ghost" onClick={() => setParams(new URLSearchParams())}>
               Clear
