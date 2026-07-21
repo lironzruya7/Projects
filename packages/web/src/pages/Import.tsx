@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { AmountMode, ColumnMapping, ImportPreview } from '../api/client';
 import { api } from '../api/client';
 import { Badge, Bidi, Button, Card, Spinner } from '../components/ui';
+import { ReconcileCard } from '../components/ReconcileCard';
 import { formatDate } from '../lib/format';
 
 interface UploadState {
@@ -446,6 +447,8 @@ export function ImportPage(): JSX.Element {
           )}
         </Card>
       )}
+
+      <ReconcileCard />
 
       <Card>
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">

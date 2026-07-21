@@ -363,6 +363,30 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ provider, months }) },
     ),
 
+  // Credit-card reconciliation (bank settlement line ↔ itemized card charges)
+  reconcile: () =>
+    req<{
+      matches: Array<{
+        settlement: { id: string; date: string; amount: number; provider: string | null; merchant: string };
+        matched: {
+          provider: string | null;
+          accountLabel: string | null;
+          itemCount: number;
+          sum: number;
+          diff: number;
+          status: 'exact' | 'close';
+          items: Array<{ id: string; date: string; amount: number; merchant: string }>;
+        } | null;
+        status: 'matched' | 'unmatched';
+      }>;
+      settlementCount: number;
+      matchedCount: number;
+      settlementTotal: number;
+      matchedCardTotal: number;
+      unassignedCardTotal: number;
+      unassignedCardCount: number;
+    }>('/api/reconcile'),
+
   // Settings / data
   settings: () => req<any>('/api/settings'),
   setCurrency: (currency: string) =>

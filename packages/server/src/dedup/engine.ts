@@ -5,6 +5,7 @@ import { daysBetween } from '../parsers/date.js';
 import { tokenSetRatio } from '../normalize/merchant.js';
 import type { DedupSettings, Transaction } from '../models/types.js';
 import { allPrimary } from '../repo/transactions.js';
+import { applySettlementCategory } from '../reconcile/reconcile.js';
 
 const DEFAULT_DEDUP: DedupSettings = {
   amountTolerancePct: 0.5,
@@ -194,6 +195,10 @@ export function runDedup(): DedupResult {
     }
   });
   insertAlerts();
+
+  // Tag bank credit-card settlement lines as Transfers so the aggregate bank
+  // charge isn't double-counted against the itemized card purchases.
+  applySettlementCategory();
 
   return { merges, mergedRows, alerts };
 }
