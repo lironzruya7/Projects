@@ -44,6 +44,10 @@ export function Dashboard(): JSX.Element {
 
   const { totals, currency } = data;
   const empty = data.counts.ledger === 0;
+  // Income / net for the reference month, from the cash-flow series.
+  const refFlow = data.cashFlow.find((c) => c.month === data.referenceMonth);
+  const incomeThisMonth = refFlow?.income ?? 0;
+  const netThisMonth = refFlow?.net ?? incomeThisMonth - totals.thisMonth;
   const cur = month ?? data.referenceMonth;
   const canPrev = cur > data.range.min;
   const canNext = cur < data.range.max;
@@ -129,8 +133,24 @@ export function Dashboard(): JSX.Element {
           }
           onClick={goToMonth}
         />
+        <StatCard
+          label="Income"
+          value={formatMoney(incomeThisMonth, currency)}
+          tint="#34d399"
+          icon="＋"
+          sub="this month"
+          onClick={() => nav(`/transactions?from=${data.referenceMonth}-01&to=${data.referenceMonth}-31`)}
+        />
+        <StatCard
+          label="Net"
+          value={formatMoney(netThisMonth, currency)}
+          tint={netThisMonth >= 0 ? '#34d399' : '#fb7185'}
+          icon="="
+          accent={netThisMonth >= 0 ? 'down' : 'up'}
+          sub="income − spend"
+        />
         <StatCard label="Last month" value={formatMoney(totals.lastMonth, currency)} tint="#a78bfa" icon="↩" />
-        <StatCard label="3-mo avg" value={formatMoney(totals.threeMonthAvg, currency)} tint="#34d399" icon="≈" />
+        <StatCard label="3-mo avg" value={formatMoney(totals.threeMonthAvg, currency)} tint="#38bdf8" icon="≈" />
         <StatCard
           label="Alerts"
           value={String(data.counts.alerts)}
