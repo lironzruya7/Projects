@@ -12,8 +12,12 @@ const KEYWORDS = {
   credit: ['זכות', 'credit'],
   merchant: ['שם בית העסק', 'שם בית עסק', 'בית העסק', 'בית עסק', 'שם העסק', 'merchant', 'business', 'payee'],
   description: ['תיאור פעולה', 'תיאור', 'פרטים', 'פירוט', 'פירוט נוסף', 'הערות', 'description', 'details', 'memo'],
-  // Prefer the *charged* currency so it matches the "סכום חיוב" amount we use.
-  currency: ['מטבע חיוב', 'מטבע עסקה', 'מטבע', 'currency'],
+  // The currency of the *charged* amount ("סכום חיוב"). This is what we import.
+  chargeCurrency: ['מטבע חיוב', 'מטבע לחיוב', 'charge currency'],
+  // The currency of the *original* transaction ("סכום עסקה מקורי") — e.g. $/€ for
+  // a foreign purchase. Only relevant when we import that original amount, NOT
+  // when we import the ₪ charge, otherwise a ₪ charge gets mislabeled as USD.
+  currency: ['מטבע עסקה', 'מטבע', 'currency'],
   type: ['סוג עסקה', 'סוג', 'type'],
   balance: ['יתרה', 'balance'],
   reference: ['מספר זיהוי עיסקה', 'מספר זיהוי עסקה', 'מס שובר', 'שובר', 'אסמכתא', 'מספר עסקה', 'מס עסקה', 'reference', 'ref'],
@@ -103,6 +107,15 @@ export function suggestMapping(header: string[]): MappingSuggestion {
   const merchant = findColumn(header, KEYWORDS.merchant);
   const description = findColumn(header, KEYWORDS.description);
 
+  // Pick the currency column that matches the amount we actually import.
+  // We import the *charged* amount ("סכום חיוב"), so its currency is the charge
+  // currency (usually ₪). Only fall back to the original-transaction currency
+  // ("מטבע עסקה"/"מטבע") when the amount is NOT a charge column — otherwise a ₪
+  // charge on a foreign purchase would be mislabeled with the original currency.
+  const chargeCurrency = findColumn(header, KEYWORDS.chargeCurrency);
+  const amountIsCharge = Boolean(amount && /חיוב/.test(amount));
+  const currency = chargeCurrency ?? (amountIsCharge ? null : findColumn(header, KEYWORDS.currency));
+
   const mapping: ColumnMapping = {
     date: findColumn(header, KEYWORDS.date),
     amount: amount,
@@ -110,7 +123,7 @@ export function suggestMapping(header: string[]): MappingSuggestion {
     credit: credit,
     merchant: merchant,
     description: description ?? merchant,
-    currency: findColumn(header, KEYWORDS.currency),
+    currency,
     type: findColumn(header, KEYWORDS.type),
     reference: findColumn(header, KEYWORDS.reference),
   };
