@@ -12,7 +12,9 @@ function isExpense(t: Transaction): boolean {
   return t.amount < 0 && t.category !== 'Transfers';
 }
 function isIncome(t: Transaction): boolean {
-  return t.amount > 0 && t.category !== 'Transfers';
+  // A positive card amount is a refund/credit, not income — don't count it.
+  // Real income comes in via the bank (salary, deposits). Transfers are excluded.
+  return t.amount > 0 && t.category !== 'Transfers' && t.sourceType !== 'card';
 }
 function mag(t: Transaction): number {
   return Math.abs(t.amount);

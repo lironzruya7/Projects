@@ -13,6 +13,7 @@ const LedgerQuery = z.object({
   provider: z.string().optional(),
   accountLabel: z.string().optional(),
   currency: z.string().optional(),
+  flow: z.enum(['in', 'out']).optional(),
   merchant: z.string().optional(),
   search: z.string().optional(),
   uncategorizedOnly: z.coerce.boolean().optional(),

@@ -138,8 +138,8 @@ export function Dashboard(): JSX.Element {
           value={formatMoney(incomeThisMonth, currency)}
           tint="#34d399"
           icon="＋"
-          sub="this month"
-          onClick={() => nav(`/transactions?from=${data.referenceMonth}-01&to=${data.referenceMonth}-31`)}
+          sub="tap to see deposits"
+          onClick={() => nav(`/transactions?from=${data.referenceMonth}-01&to=${data.referenceMonth}-31&flow=in`)}
         />
         <StatCard
           label="Net"

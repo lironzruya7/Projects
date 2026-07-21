@@ -108,6 +108,7 @@ export interface LedgerQuery {
   provider?: string;
   accountLabel?: string;
   currency?: string;
+  flow?: 'in' | 'out'; // in = deposits (amount>0), out = spend (amount<0)
   merchant?: string;
   search?: string;
   uncategorizedOnly?: boolean;
@@ -153,6 +154,8 @@ export function queryLedger(q: LedgerQuery): LedgerEntry[] {
     where.push('currency = @currency');
     params.currency = q.currency;
   }
+  if (q.flow === 'in') where.push('amount > 0');
+  else if (q.flow === 'out') where.push('amount < 0');
   if (q.merchant) {
     where.push('merchant_normalized = @merchant');
     params.merchant = q.merchant;

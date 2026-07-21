@@ -22,6 +22,7 @@ export function Transactions(): JSX.Element {
     provider: params.get('provider') ?? undefined,
     accountLabel: params.get('accountLabel') ?? undefined,
     currency: params.get('currency') ?? undefined,
+    flow: params.get('flow') ?? undefined,
     merchant: params.get('merchant') ?? undefined,
     from: params.get('from') ?? undefined,
     to: params.get('to') ?? undefined,
