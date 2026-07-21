@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { createScraper } from 'israeli-bank-scrapers';
 import { config } from '../config.js';
 import { ParsedTransaction } from '../models/types.js';
@@ -52,13 +54,16 @@ export async function runScrape(providerKey: string, opts?: { months?: number })
 
   const startDate = monthsAgo(opts?.months ?? 3);
   const proxyArgs = config.scrapeProxy ? [`--proxy-server=${config.scrapeProxy}`] : [];
+  mkdirSync(config.scrapeDebugDir, { recursive: true });
   const scraper = createScraper({
     companyId: spec.companyId as never,
     startDate,
     combineInstallments: false,
-    showBrowser: false,
+    showBrowser: config.scrapeShowBrowser,
     timeout: config.scrapeTimeoutMs,
     defaultTimeout: config.scrapeTimeoutMs,
+    // On failure, save a screenshot so we can see what page the browser was on.
+    storeFailureScreenShotPath: join(config.scrapeDebugDir, `${spec.key}.png`),
     ...(config.puppeteerExecutablePath ? { executablePath: config.puppeteerExecutablePath } : {}),
     args: [...proxyArgs, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
   } as never);

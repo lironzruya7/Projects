@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { SCRAPE_PROVIDERS, getProviderSpec } from '../scrape/providers.js';
@@ -43,7 +45,21 @@ export async function scrapeRoutes(app: FastifyInstance): Promise<void> {
       const result = await runScrape(body.provider, { months: body.months });
       return result;
     } catch (err) {
-      return reply.code(400).send({ error: (err as Error).message });
+      // Point the client at the failure screenshot so we can see what happened.
+      return reply.code(400).send({ error: (err as Error).message, debugShot: `/api/scrape/debug/${body.provider}` });
+    }
+  });
+
+  // Serve the last failure screenshot for a provider (debug).
+  app.get('/api/scrape/debug/:provider', async (req, reply) => {
+    const { provider } = req.params as { provider: string };
+    if (!getProviderSpec(provider)) return reply.code(404).send({ error: 'Unknown provider' });
+    try {
+      const buf = readFileSync(join(config.scrapeDebugDir, `${provider}.png`));
+      reply.header('content-type', 'image/png');
+      return reply.send(buf);
+    } catch {
+      return reply.code(404).send({ error: 'No debug screenshot yet' });
     }
   });
 }

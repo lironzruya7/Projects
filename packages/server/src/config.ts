@@ -43,6 +43,10 @@ export const config = {
   // browser (e.g. an Israeli proxy when the VPS IP is geo-blocked).
   scrapeTimeoutMs: Number(envStr('SCRAPE_TIMEOUT_MS', '120000')),
   scrapeProxy: envStr('SCRAPE_PROXY'),
+  // Run the scraper's browser in headful mode (needs a display, e.g. xvfb) to
+  // dodge headless bot-detection. Failure screenshots are written here.
+  scrapeShowBrowser: envStr('SCRAPE_SHOW_BROWSER') === 'true',
+  scrapeDebugDir: resolve(dirname(resolve(repoRoot, envStr('DATABASE_PATH', './data/finance.sqlite'))), 'scrape-debug'),
   gmail: {
     clientId: envStr('GMAIL_CLIENT_ID'),
     clientSecret: envStr('GMAIL_CLIENT_SECRET'),

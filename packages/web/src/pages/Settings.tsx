@@ -299,6 +299,7 @@ function DirectConnectCard(): JSX.Element {
   const [creds, setCreds] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [debugShot, setDebugShot] = useState<string | null>(null);
 
   async function load(): Promise<void> {
     setData(await api.scrapeProviders());
@@ -320,6 +321,13 @@ function DirectConnectCard(): JSX.Element {
         browser does it locally). Credentials stay on this machine{data.encryptedAtRest ? ', encrypted at rest' : ''}.
       </p>
       {msg && <div className={`text-sm mb-2 ${msg.ok ? 'text-emerald-400' : 'text-rose-400'}`}>{msg.text}</div>}
+      {debugShot && (
+        <div className="mb-2">
+          <a href={debugShot} target="_blank" rel="noreferrer" className="text-brand text-sm underline">
+            🖼 See what the browser saw when it failed
+          </a>
+        </div>
+      )}
 
       <div className="space-y-2">
         {data.providers.map((p) => (
@@ -334,12 +342,14 @@ function DirectConnectCard(): JSX.Element {
                     disabled={busy === p.key}
                     onClick={async () => {
                       setBusy(p.key);
+                      setDebugShot(null);
                       setMsg({ ok: true, text: `Syncing ${p.label}… this can take a minute (logging in).` });
                       try {
                         const r = await api.runScrape(p.key, 3);
                         setMsg({ ok: true, text: `${p.label}: added ${r.transactionsCreated} txns · skipped ${r.skippedExisting} existing (since ${r.fromDate}).` });
                       } catch (e) {
                         setMsg({ ok: false, text: `${p.label}: ${(e as Error).message}` });
+                        setDebugShot(`/api/scrape/debug/${p.key}?t=${Date.now()}`);
                       } finally {
                         setBusy(null);
                       }
