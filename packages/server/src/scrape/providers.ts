@@ -27,17 +27,9 @@ export const SCRAPE_PROVIDERS: ScrapeProvider[] = [
       { key: 'password', label: 'Password', type: 'password' },
     ],
   },
-  {
-    key: 'isracard',
-    label: 'Isracard (ישראכרט)',
-    companyId: CompanyTypes.isracard,
-    sourceType: 'card',
-    fields: [
-      { key: 'id', label: 'ID number (ת.ז.)', type: 'text' },
-      { key: 'card6Digits', label: 'Last 6 card digits', type: 'text' },
-      { key: 'password', label: 'Password', type: 'password' },
-    ],
-  },
+  // Isracard is intentionally omitted from the direct connection — their site
+  // aggressively blocks the automated browser (HTTP 403). Import Isracard via a
+  // file export (CSV/Excel/PDF) instead.
   {
     key: 'cal',
     label: 'Cal / Visa Cal (כאל)',
