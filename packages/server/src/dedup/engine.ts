@@ -32,6 +32,19 @@ function isSameSource(a: Transaction, b: Transaction): boolean {
   return a.sourceType === b.sourceType && a.sourceProvider === b.sourceProvider;
 }
 
+/**
+ * Email/receipt sources duplicate the SAME payment across several messages
+ * (e.g. PayPal sends confirmation + receipt + update emails). A same-source
+ * match between two of them is a duplicate notification, not a real double
+ * charge — so merge it automatically instead of raising an alert. Card/bank
+ * same-source repeats stay alerts (there a double charge is genuinely possible).
+ */
+function isNotificationDuplicate(a: Transaction, b: Transaction): boolean {
+  const soft = a.sourceType === 'email' || a.sourceType === 'receipt';
+  const softB = b.sourceType === 'email' || b.sourceType === 'receipt';
+  return soft && softB;
+}
+
 /** Find all matching candidate pairs among the current primary transactions. */
 function findCandidates(txns: Transaction[], cfg: DedupSettings): Candidate[] {
   // Block by rounded magnitude to keep comparisons local.
@@ -135,7 +148,9 @@ export function runDedup(): DedupResult {
 
   const alertPairs: Candidate[] = [];
   for (const c of candidates) {
-    if (c.sameSource) alertPairs.push(c);
+    // Cross-source, or same-source email/receipt notifications => merge.
+    // Same-source card/bank => alert (possible real double charge).
+    if (c.sameSource && !isNotificationDuplicate(c.a, c.b)) alertPairs.push(c);
     else union(c.a.id, c.b.id);
   }
 
