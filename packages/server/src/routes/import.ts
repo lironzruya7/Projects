@@ -6,7 +6,7 @@ import { autoParseFile } from '../parsers/autoImport.js';
 import { readGrid } from '../parsers/tabular.js';
 import { getMapping, listMappings, saveMapping } from '../repo/mappings.js';
 import { createHash } from 'node:crypto';
-import { createBatch, deleteBatch, deleteBatchesBySource, findBatchByHash, listBatches, setBatchPeriod, setBatchProvider, setBatchRowCount } from '../repo/batches.js';
+import { createBatch, deleteBatch, deleteBatchesBySource, findBatchByHash, findDuplicateBatchGroups, listBatches, setBatchPeriod, setBatchProvider, setBatchRowCount } from '../repo/batches.js';
 import { insertParsed } from '../repo/transactions.js';
 import { runDedup } from '../dedup/engine.js';
 import { getUpload, putUpload } from '../util/uploadCache.js';
@@ -160,6 +160,25 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/api/import/batches', async () => ({ batches: listBatches() }));
+
+  // Scan already-imported card files for duplicates (same file, or same card +
+  // month + shape). Returns groups newest-first (keep the first, drop the rest).
+  app.get('/api/import/duplicates', async () => ({ groups: findDuplicateBatchGroups() }));
+
+  // Delete the redundant copies, keeping the oldest in each duplicate group.
+  app.post('/api/import/duplicates/clean', async () => {
+    const groups = findDuplicateBatchGroups();
+    let deleted = 0;
+    for (const g of groups) {
+      // g is newest-first; keep the oldest (last), delete the rest.
+      for (const b of g.slice(0, -1)) {
+        deleteBatch(b.id);
+        deleted++;
+      }
+    }
+    const dedup = runDedup();
+    return { ok: true, deleted, dedup };
+  });
 
   // Relabel a batch's card type (e.g. a Diners card that imported as Cal).
   app.put('/api/import/batches/:id/provider', async (req) => {

@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import { Badge, Bidi, Button, Card, Spinner } from '../components/ui';
 import { ReconcileCard } from '../components/ReconcileCard';
 import { CARD_PROVIDERS } from '../lib/accounts';
-import { formatDate } from '../lib/format';
+import { formatDate, formatMoney } from '../lib/format';
 
 interface UploadState {
   uploadId: string;
@@ -38,6 +38,7 @@ export function ImportPage(): JSX.Element {
   const [autoBusy, setAutoBusy] = useState(false);
   const [autoResults, setAutoResults] = useState<Awaited<ReturnType<typeof api.autoImport>> | null>(null);
   const [cardStaged, setCardStaged] = useState<Array<{ file: File; label: string; provider: string }> | null>(null);
+  const [dupGroups, setDupGroups] = useState<Awaited<ReturnType<typeof api.duplicateBatches>>['groups'] | null>(null);
 
   // Mapping form state
   const [mapping, setMapping] = useState<ColumnMapping>({});
@@ -131,6 +132,35 @@ export function ImportPage(): JSX.Element {
     setCardStaged(Array.from(files).map((f) => ({ file: f, label: '', provider: '' })));
     setAutoResults(null);
     setError(null);
+  }
+
+  async function scanDuplicates(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.duplicateBatches();
+      setDupGroups(r.groups);
+      setHistoryMsg(r.groups.length ? `Found ${r.groups.length} duplicate group(s).` : 'No duplicate files found. ✓');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function cleanDuplicates(): Promise<void> {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.cleanDuplicateBatches();
+      setHistoryMsg(`Deleted ${r.deleted} duplicate file(s).`);
+      setDupGroups(null);
+      await loadBatches();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function runCardImport(): Promise<void> {
@@ -472,7 +502,10 @@ export function ImportPage(): JSX.Element {
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h3 className="font-medium">Import history</h3>
           {batches.length > 0 && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="ghost" disabled={busy} onClick={scanDuplicates}>
+                {busy ? '…' : 'Scan duplicates'}
+              </Button>
               {(['email', 'bank', 'card'] as const).map((st) => {
                 const count = batches.filter((b) => b.source_type === st).length;
                 if (count === 0) return null;
@@ -516,6 +549,40 @@ export function ImportPage(): JSX.Element {
           )}
         </div>
         {historyMsg && <div className="text-emerald-400 text-sm mb-2">{historyMsg}</div>}
+
+        {dupGroups && dupGroups.length > 0 && (
+          <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+              <span className="text-sm font-medium text-amber-200">
+                {dupGroups.length} duplicate file group(s) — same card, month &amp; total imported more than once
+              </span>
+              <Button disabled={busy} onClick={cleanDuplicates}>
+                Delete {dupGroups.reduce((s, g) => s + g.length - 1, 0)} extra(s), keep oldest
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {dupGroups.map((g, i) => (
+                <div key={i} className="text-xs bg-panel2/40 rounded-lg p-2">
+                  <div className="text-muted mb-1">
+                    {g[0]!.provider ?? 'card'}{g[0]!.accountLabel ? ` ••${g[0]!.accountLabel}` : ''}
+                    {g[0]!.period ? ` · ${g[0]!.period}` : ''} · {g[0]!.rowCount} rows · {formatMoney(g[0]!.total)} · {g.length} copies
+                  </div>
+                  {g.map((b, j) => (
+                    <div key={b.id} className="flex items-center justify-between gap-2">
+                      <Bidi className="truncate">
+                        {`${j === g.length - 1 ? '✓ ' : '⊘ '}${b.filename ?? b.id.slice(0, 8)}`}
+                      </Bidi>
+                      <span className="text-muted whitespace-nowrap">
+                        {formatDate((b.createdAt ?? '').slice(0, 10))}{j === g.length - 1 ? ' · keep' : ' · delete'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {batches.length === 0 ? (
           <div className="text-muted text-sm">No imports yet.</div>
         ) : (

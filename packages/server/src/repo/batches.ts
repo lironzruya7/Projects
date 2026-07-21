@@ -57,6 +57,51 @@ export function setBatchPeriod(id: string, period: string | null): void {
   getDb().prepare(`UPDATE import_batches SET period = ? WHERE id = ?`).run(p, id);
 }
 
+export interface DuplicateBatch {
+  id: string;
+  filename: string | null;
+  provider: string | null;
+  accountLabel: string | null;
+  period: string | null;
+  rowCount: number;
+  total: number;
+  createdAt: string;
+}
+
+/**
+ * Groups of card import-batches that look like the same statement imported more
+ * than once: identical file (same sha256), OR same card + month + row count +
+ * total. Each group is newest-first; keep the first, the rest are the extras.
+ */
+export function findDuplicateBatchGroups(): DuplicateBatch[][] {
+  const rows = getDb()
+    .prepare(
+      `SELECT b.id, b.filename, b.source_provider AS provider, b.account_label AS accountLabel,
+              b.period, b.row_count AS rowCount, b.file_hash AS fileHash, b.created_at AS createdAt,
+              COALESCE(SUM(ABS(t.amount)), 0) AS total
+       FROM import_batches b
+       LEFT JOIN transactions t ON t.import_batch = b.id
+       WHERE b.source_type = 'card'
+       GROUP BY b.id`,
+    )
+    .all() as Array<DuplicateBatch & { fileHash: string | null }>;
+
+  const groups = new Map<string, DuplicateBatch[]>();
+  for (const r of rows) {
+    // Same exact file, or same card+month+shape.
+    const key = r.fileHash
+      ? `hash:${r.fileHash}`
+      : `shape:${r.provider ?? ''}|${r.accountLabel ?? ''}|${r.period ?? ''}|${r.rowCount}|${Math.round(r.total)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    const { fileHash: _omit, ...rest } = r;
+    groups.get(key)!.push(rest);
+  }
+
+  return [...groups.values()]
+    .filter((g) => g.length >= 2)
+    .map((g) => g.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+}
+
 export function setBatchRowCount(id: string, count: number): void {
   getDb().prepare(`UPDATE import_batches SET row_count = ? WHERE id = ?`).run(count, id);
 }

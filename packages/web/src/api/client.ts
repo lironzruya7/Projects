@@ -403,6 +403,14 @@ export const api = {
     }),
   setBatchPeriod: (id: string, period: string) =>
     req<{ ok: boolean }>(`/api/import/batches/${id}/period`, { method: 'PUT', body: JSON.stringify({ period }) }),
+  duplicateBatches: () =>
+    req<{
+      groups: Array<
+        Array<{ id: string; filename: string | null; provider: string | null; accountLabel: string | null; period: string | null; rowCount: number; total: number; createdAt: string }>
+      >;
+    }>('/api/import/duplicates'),
+  cleanDuplicateBatches: () =>
+    req<{ ok: boolean; deleted: number }>('/api/import/duplicates/clean', { method: 'POST' }),
 
   // Credit-card reconciliation (bank settlement line ↔ itemized card charges)
   reconcile: () =>
