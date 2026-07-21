@@ -300,6 +300,7 @@ function DirectConnectCard(): JSX.Element {
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [debugShot, setDebugShot] = useState<string | null>(null);
+  const [months, setMonths] = useState(3);
 
   async function load(): Promise<void> {
     setData(await api.scrapeProviders());
@@ -312,9 +313,24 @@ function DirectConnectCard(): JSX.Element {
 
   return (
     <Card>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2 gap-2">
         <h3 className="font-medium">Direct connection (banks & cards)</h3>
-        {data.encryptedAtRest ? <Badge tone="good">encrypted</Badge> : <Badge tone="warn">set TOKEN_ENCRYPTION_KEY</Badge>}
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-muted flex items-center gap-1">
+            history
+            <select
+              className="bg-panel2 border border-edge rounded px-1.5 py-0.5 text-xs"
+              value={months}
+              onChange={(e) => setMonths(Number(e.target.value))}
+            >
+              <option value={1}>1 mo</option>
+              <option value={3}>3 mo</option>
+              <option value={6}>6 mo</option>
+              <option value={12}>12 mo</option>
+            </select>
+          </label>
+          {data.encryptedAtRest ? <Badge tone="good">encrypted</Badge> : <Badge tone="warn">set key</Badge>}
+        </div>
       </div>
       <p className="text-xs text-muted mb-3">
         Pull transactions straight from Bank Yahav / Isracard / Cal by logging in with your credentials (a headless
@@ -343,9 +359,9 @@ function DirectConnectCard(): JSX.Element {
                     onClick={async () => {
                       setBusy(p.key);
                       setDebugShot(null);
-                      setMsg({ ok: true, text: `Syncing ${p.label}… this can take a minute (logging in).` });
+                      setMsg({ ok: true, text: `Syncing ${p.label} (${months} mo)… this can take a minute (logging in).` });
                       try {
-                        const r = await api.runScrape(p.key, 3);
+                        const r = await api.runScrape(p.key, months);
                         setMsg({ ok: true, text: `${p.label}: added ${r.transactionsCreated} txns · skipped ${r.skippedExisting} existing (since ${r.fromDate}).` });
                       } catch (e) {
                         setMsg({ ok: false, text: `${p.label}: ${(e as Error).message}` });

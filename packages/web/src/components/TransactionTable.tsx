@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type { Category, LedgerEntry } from '../api/client';
 import { api } from '../api/client';
-import { formatDate, formatMoney } from '../lib/format';
+import { formatDate, formatMoney, formatMonthLong } from '../lib/format';
 import { categoryColor } from '../lib/colors';
 import { accountColor, accountLabel } from '../lib/accounts';
 import { Badge, Bidi, Button } from './ui';
@@ -46,11 +46,18 @@ export function TransactionTable({
 
   return (
     <div className="divide-y divide-edge/40">
-      {entries.map((e) => {
+      {entries.map((e, i) => {
         const color = categoryColor(e.category);
         const isOpen = expanded === e.id;
+        const month = e.date.slice(0, 7);
+        const showMonth = i === 0 || entries[i - 1]!.date.slice(0, 7) !== month;
         return (
           <Fragment key={e.id}>
+            {showMonth && (
+              <div className="sticky top-0 z-10 -mx-4 px-4 py-1.5 bg-surface/95 backdrop-blur border-y border-edge/60 text-xs font-medium text-muted uppercase tracking-wide">
+                {formatMonthLong(month)}
+              </div>
+            )}
             <div className="flex items-start gap-3 py-2.5">
               <span className="w-1.5 h-9 rounded-full shrink-0 mt-0.5" style={{ background: color }} />
               <div className="flex-1 min-w-0">
