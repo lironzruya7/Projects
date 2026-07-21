@@ -135,6 +135,7 @@ export interface RecommendationReport {
     label: string;
     monthlyCost: number;
     overlapping: boolean;
+    saveable: boolean;
     merchants: Array<{ merchant: string; monthlyCost: number; total: number; count: number }>;
   }>;
   recommendations: Array<{ kind: string; title: string; detail: string; monthlySaving: number }>;

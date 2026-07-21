@@ -120,7 +120,7 @@ export function Insights(): JSX.Element {
                           className="w-full flex items-center justify-between gap-2 text-xs"
                         >
                           <Bidi className="truncate text-muted">{m.merchant}</Bidi>
-                          <span className="whitespace-nowrap">{formatMoney(m.monthlyCost, cur)}/mo · {m.count}×</span>
+                          <span className="whitespace-nowrap">{formatMoney(m.monthlyCost, cur)}/mo · {m.count} charge{m.count === 1 ? '' : 's'}</span>
                         </button>
                       ))}
                     </div>

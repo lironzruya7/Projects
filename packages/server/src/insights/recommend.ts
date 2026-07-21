@@ -11,7 +11,9 @@ const mag = (t: Transaction): number => Math.abs(t.amount);
  * (e.g. OpenAI + Anthropic + Manus = 3 AI tools), that's overlapping spend the
  * user may want to consolidate.
  */
-const SERVICE_GROUPS: Array<{ key: string; label: string; re: RegExp }> = [
+// `saveable: false` groups are shown for awareness but never generate a
+// "consolidate to save" tip — the items are distinct necessities, not overlap.
+const SERVICE_GROUPS: Array<{ key: string; label: string; re: RegExp; saveable?: boolean }> = [
   { key: 'ai', label: 'AI tools', re: /openai|chatgpt|anthropic|claude|manus|midjourney|perplexity|copilot|gemini|cursor|replit|huggingface|elevenlabs|invideo|runway|capcut|synthesia|character\.?ai/i },
   { key: 'telecom', label: 'Phone & mobile', re: /cellcom|סלקום|partner|פרטנר|pelephone|פלאפון|hot\s*mobile|הוט\s*מובייל|golan|גולן|019|rami\s*levy|רמי\s*לוי\s*תקשורת|we4g|012\s*mobile|טלקום/i },
   { key: 'streaming', label: 'Streaming & media', re: /netflix|נטפליקס|spotify|ספוטיפיי|youtube\s*premium|disney|hbo|apple\s*music|apple\.com\/bill|itunes|prime\s*video|paramount|סלקום\s*tv|yes|סטינג|audible/i },
@@ -19,12 +21,14 @@ const SERVICE_GROUPS: Array<{ key: string; label: string; re: RegExp }> = [
   { key: 'software', label: 'Software & productivity', re: /notion|obsidian|figma|adobe|microsoft\s*365|office\s*365|dropbox|1password|lastpass|slack|zoom|grammarly|canva|jetbrains|github|gitlab/i },
   { key: 'gaming', label: 'Gaming', re: /roblox|steam|playstation|\bpsn\b|xbox|nintendo|epic\s*games|riot/i },
   { key: 'food', label: 'Food delivery', re: /wolt|וולט|10bis|תן\s*ביס|cibus|סיבוס|mishloha|משלוחה/i },
-  { key: 'insurance', label: 'Insurance', re: /ביטוח|insurance|מגדל|הראל|כלל\s*ביטוח|מנורה|הפניקס|איילון|שלמה\s*ביטוח/i },
+  // Insurance policies (health, life, travel, national insurance) are distinct
+  // and mostly mandatory — informational only, not "overlap to cut".
+  { key: 'insurance', label: 'Insurance', re: /ביטוח|insurance|מגדל|הראל|כלל\s*ביטוח|מנורה|הפניקס|איילון|שלמה\s*ביטוח|ביטוח\s*לאומי/i, saveable: false },
   { key: 'gym', label: 'Gym & fitness', re: /holmes\s*place|הולמס|גולד\s*ג\S*ם|gold'?s\s*gym|icon|אנרג\S*ם|קאנטרי|fitness|כושר/i },
 ];
 
-function classify(merchant: string): { key: string; label: string } | null {
-  for (const g of SERVICE_GROUPS) if (g.re.test(merchant)) return { key: g.key, label: g.label };
+function classify(merchant: string): { key: string; label: string; saveable: boolean } | null {
+  for (const g of SERVICE_GROUPS) if (g.re.test(merchant)) return { key: g.key, label: g.label, saveable: g.saveable !== false };
   return null;
 }
 
@@ -34,6 +38,7 @@ export interface ServiceGroup {
   monthlyCost: number;
   merchants: Array<{ merchant: string; monthlyCost: number; total: number; count: number }>;
   overlapping: boolean;
+  saveable: boolean;
 }
 
 export interface Recommendation {
@@ -102,7 +107,7 @@ export function buildRecommendations(): RecommendationReport {
   for (const [merchant, v] of merchMap) {
     const g = classify(merchant);
     if (!g) continue;
-    const sg = groupMap.get(g.key) ?? { key: g.key, label: g.label, monthlyCost: 0, merchants: [], overlapping: false };
+    const sg = groupMap.get(g.key) ?? { key: g.key, label: g.label, monthlyCost: 0, merchants: [], overlapping: false, saveable: g.saveable };
     sg.merchants.push({ merchant, monthlyCost: perMonth(v.total), total: v.total, count: v.count });
     sg.monthlyCost += perMonth(v.total);
     groupMap.set(g.key, sg);
@@ -119,7 +124,8 @@ export function buildRecommendations(): RecommendationReport {
   const recs: Recommendation[] = [];
 
   // 1) Overlapping services of the same type — drop all but the biggest.
-  for (const sg of serviceGroups.filter((s) => s.overlapping)) {
+  //    Skip groups that aren't really consolidatable (e.g. insurance).
+  for (const sg of serviceGroups.filter((s) => s.overlapping && s.saveable)) {
     const keep = sg.merchants[0]!.monthlyCost;
     const saving = sg.monthlyCost - keep;
     recs.push({
