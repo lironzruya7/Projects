@@ -414,6 +414,7 @@ export const api = {
           status: 'exact' | 'close';
           items: Array<{ id: string; date: string; amount: number; merchant: string }>;
         } | null;
+        nearest?: { provider: string | null; accountLabel: string | null; sum: number; diff: number } | null;
         status: 'matched' | 'unmatched';
       }>;
       settlementCount: number;

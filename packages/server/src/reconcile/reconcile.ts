@@ -174,6 +174,8 @@ export interface ReconMatch {
     status: 'exact' | 'close';
     items: ReconItem[];
   } | null;
+  // For unmatched lines: the closest single card statement, to explain why.
+  nearest?: { provider: string | null; accountLabel: string | null; sum: number; diff: number } | null;
   status: 'matched' | 'unmatched';
 }
 export interface ReconReport {
@@ -322,7 +324,16 @@ export function buildReconciliation(opts?: { tolPct?: number; tolMinor?: number;
         status: 'matched',
       });
     } else {
-      matches.push({ settlement, matched: null, status: 'unmatched' });
+      // Explain the miss: the closest single unconsumed statement by amount.
+      let nearest: ReconMatch['nearest'] = null;
+      for (const st of statements) {
+        if (consumed.has(st.batchId)) continue;
+        const diff = Math.abs(target - st.total);
+        if (!nearest || diff < nearest.diff) {
+          nearest = { provider: st.provider, accountLabel: st.accountLabel, sum: st.total, diff };
+        }
+      }
+      matches.push({ settlement, matched: null, nearest, status: 'unmatched' });
     }
   }
 

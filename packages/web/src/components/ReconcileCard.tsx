@@ -123,10 +123,23 @@ export function ReconcileCard({ currency = 'ILS' }: { currency?: string }): JSX.
                         </div>
                       )}
                       {isOpen && !m.matched && (
-                        <div className="bg-panel2/30 px-3 py-2 text-xs text-muted">
-                          Couldn't find card charges that sum to this bank line. Either the matching card export isn't
-                          imported yet, or the amounts differ (fees / foreign-currency rounding). It's still excluded from
-                          spending as a Transfer.
+                        <div className="bg-panel2/30 px-3 py-2 text-xs text-muted space-y-1">
+                          {m.nearest ? (
+                            <div>
+                              Closest card statement:{' '}
+                              <span className="text-ink">
+                                {accountLabel(m.nearest.provider, 'card', m.nearest.accountLabel)} · {formatMoney(m.nearest.sum, currency)}
+                              </span>{' '}
+                              (off by <span className="text-amber-300">{formatMoney(m.nearest.diff, currency)}</span>).
+                            </div>
+                          ) : (
+                            <div>No card statements available to match.</div>
+                          )}
+                          <div>
+                            If the difference is small it's likely a fee/rounding — widen tolerance. If it's large, the
+                            matching month's card file probably isn't imported yet. Either way it's excluded from spending
+                            as a Transfer.
+                          </div>
                         </div>
                       )}
                     </div>
