@@ -20,6 +20,7 @@ export function Transactions(): JSX.Element {
     category: params.get('category') ?? undefined,
     sourceType: params.get('sourceType') ?? undefined,
     provider: params.get('provider') ?? undefined,
+    accountLabel: params.get('accountLabel') ?? undefined,
     currency: params.get('currency') ?? undefined,
     merchant: params.get('merchant') ?? undefined,
     from: params.get('from') ?? undefined,
@@ -109,15 +110,21 @@ export function Transactions(): JSX.Element {
           {accounts.some((a) => a.provider) && (
             <select
               className="bg-panel2 border border-edge rounded-lg px-2 py-1.5 text-sm"
-              value={filters.provider ?? ''}
-              onChange={(e) => setFilter('provider', e.target.value || undefined)}
+              value={`${filters.provider ?? ''}::${filters.accountLabel ?? ''}`}
+              onChange={(e) => {
+                const [prov, label] = e.target.value.split('::');
+                const next = new URLSearchParams(params);
+                prov ? next.set('provider', prov) : next.delete('provider');
+                label ? next.set('accountLabel', label) : next.delete('accountLabel');
+                setParams(next);
+              }}
             >
-              <option value="">All accounts</option>
+              <option value={'::'}>All accounts</option>
               {accounts
                 .filter((a) => a.provider)
                 .map((a) => (
-                  <option key={a.provider} value={a.provider!}>
-                    {accountLabel(a.provider, a.sourceType)} ({a.count})
+                  <option key={`${a.provider}::${a.accountLabel ?? ''}`} value={`${a.provider}::${a.accountLabel ?? ''}`}>
+                    {accountLabel(a.provider, a.sourceType, a.accountLabel)} ({a.count})
                   </option>
                 ))}
             </select>

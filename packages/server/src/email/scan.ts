@@ -91,7 +91,26 @@ async function messageToTransactions(msg: EmailMessage, provider: string): Promi
     }
   }
 
-  return out;
+  return collapseSameAmount(out);
+}
+
+/**
+ * A single email often states the same total twice — in the body AND in an
+ * attached invoice PDF — yielding two rows for one purchase. They share a source
+ * (same email), so dedup would only *alert*, not merge, leaving the amount
+ * double-counted. Collapse equal-amount rows here, keeping the richest one
+ * (an invoice number and an attachment make a row more useful downstream).
+ */
+function collapseSameAmount(cands: ParsedTransaction[]): ParsedTransaction[] {
+  const best = new Map<string, ParsedTransaction>();
+  const score = (t: ParsedTransaction): number =>
+    (t.externalId ? 2 : 0) + ((t.sourceRef ?? '').split(':').length > 2 ? 1 : 0);
+  for (const c of cands) {
+    const key = `${c.currency}|${Math.round(Math.abs(c.amount) * 100)}`;
+    const prev = best.get(key);
+    if (!prev || score(c) > score(prev)) best.set(key, c);
+  }
+  return [...best.values()];
 }
 
 export interface ScanResult {

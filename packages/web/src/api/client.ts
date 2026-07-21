@@ -93,6 +93,7 @@ export interface DashboardSummary {
 
 export interface Account {
   provider: string | null;
+  accountLabel: string | null;
   sourceType: string;
   count: number;
 }

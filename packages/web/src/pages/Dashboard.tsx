@@ -219,9 +219,13 @@ export function Dashboard(): JSX.Element {
                 <button
                   key={`${a.provider}|${a.accountLabel}|${a.sourceType}`}
                   className="w-full text-left active:scale-[0.99] transition-transform"
-                  onClick={() =>
-                    nav(a.provider ? `/transactions?provider=${encodeURIComponent(a.provider)}` : `/transactions?sourceType=${a.sourceType}`)
-                  }
+                  onClick={() => {
+                    const p = new URLSearchParams();
+                    if (a.provider) p.set('provider', a.provider);
+                    else p.set('sourceType', a.sourceType);
+                    if (a.accountLabel) p.set('accountLabel', a.accountLabel);
+                    nav(`/transactions?${p.toString()}`);
+                  }}
                 >
                   <div className="flex justify-between items-center text-sm mb-1">
                     <span className="flex items-center gap-2">

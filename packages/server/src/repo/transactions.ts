@@ -106,6 +106,7 @@ export interface LedgerQuery {
   category?: string;
   sourceType?: SourceType;
   provider?: string;
+  accountLabel?: string;
   currency?: string;
   merchant?: string;
   search?: string;
@@ -143,6 +144,10 @@ export function queryLedger(q: LedgerQuery): LedgerEntry[] {
   if (q.provider) {
     where.push('source_provider = @provider');
     params.provider = q.provider;
+  }
+  if (q.accountLabel) {
+    where.push('account_label = @accountLabel');
+    params.accountLabel = q.accountLabel;
   }
   if (q.currency) {
     where.push('currency = @currency');
@@ -239,14 +244,19 @@ export function distinctMerchants(): Array<{ merchant: string; count: number }> 
 }
 
 /** Distinct accounts (provider + source type) with transaction counts. */
-export function listAccounts(): Array<{ provider: string | null; sourceType: string; count: number }> {
+export function listAccounts(): Array<{
+  provider: string | null;
+  accountLabel: string | null;
+  sourceType: string;
+  count: number;
+}> {
   return getDb()
     .prepare(
-      `SELECT source_provider AS provider, source_type AS sourceType, COUNT(*) AS count
+      `SELECT source_provider AS provider, account_label AS accountLabel, source_type AS sourceType, COUNT(*) AS count
        FROM transactions WHERE merged_into IS NULL
-       GROUP BY source_provider, source_type ORDER BY count DESC`,
+       GROUP BY source_provider, account_label, source_type ORDER BY count DESC`,
     )
-    .all() as Array<{ provider: string | null; sourceType: string; count: number }>;
+    .all() as Array<{ provider: string | null; accountLabel: string | null; sourceType: string; count: number }>;
 }
 
 /** Distinct currencies present in the ledger, with counts. */
