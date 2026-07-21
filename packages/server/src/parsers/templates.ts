@@ -37,18 +37,22 @@ export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
     amountMode: 'debit_credit',
   },
   {
-    key: 'isracard',
-    label: 'Isracard (ישראכרט)',
-    sourceType: 'card',
-    fingerprint: ['שם בית עסק', 'סכום חיוב'],
-    amountMode: 'flip_sign', // card charges are positive magnitudes = outflow
-  },
-  {
+    // Cal exports carry a "ענף" (business sector) column and have no separate
+    // currency column — the ₪ symbol is inline in "סכום חיוב". Checked before
+    // Isracard so the more specific signal wins.
     key: 'cal',
     label: 'Cal / Visa Cal (כאל)',
     sourceType: 'card',
-    fingerprint: ['שם בית העסק', 'סכום חיוב'],
+    fingerprint: ['ענף', 'סכום חיוב'],
     amountMode: 'flip_sign',
+  },
+  {
+    // Isracard exports carry a "מטבע חיוב" (charged currency) column; Cal does not.
+    key: 'isracard',
+    label: 'Isracard (ישראכרט)',
+    sourceType: 'card',
+    fingerprint: ['שם בית עסק', 'מטבע חיוב'],
+    amountMode: 'flip_sign', // card charges are positive magnitudes = outflow
   },
 ];
 
