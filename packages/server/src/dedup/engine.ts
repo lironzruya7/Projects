@@ -4,7 +4,7 @@ import { amountsMatch } from '../parsers/amount.js';
 import { daysBetween } from '../parsers/date.js';
 import { tokenSetRatio } from '../normalize/merchant.js';
 import type { DedupSettings, Transaction } from '../models/types.js';
-import { allPrimary } from '../repo/transactions.js';
+import { allPrimary, getTransaction } from '../repo/transactions.js';
 import { applySettlementCategory } from '../reconcile/reconcile.js';
 
 const DEFAULT_DEDUP: DedupSettings = {
@@ -266,4 +266,72 @@ export function listAlerts(status?: string): Array<AlertRow & { a: Transaction |
 
 export function resolveAlert(id: string, status: 'confirmed' | 'dismissed'): void {
   getDb().prepare(`UPDATE double_charge_alerts SET status = ? WHERE id = ?`).run(status, id);
+}
+
+/** A pair that is certainly the same transaction (not a genuine double charge). */
+function isExactDuplicate(a: Transaction | null, b: Transaction | null, similarity: number): boolean {
+  if (!a || !b || a.mergedInto || b.mergedInto) return false;
+  const sameAmount = Math.abs(Math.abs(a.amount) - Math.abs(b.amount)) < 0.005 && a.currency === b.currency;
+  if (!sameAmount) return false;
+  const sameRef = sameExternalId(a.externalId, b.externalId);
+  const sameDate = a.date === b.date;
+  const sameMerchant = Boolean(a.merchantNormalized) && a.merchantNormalized === b.merchantNormalized;
+  // Same invoice number is conclusive; otherwise require same day + same merchant
+  // (or a ~perfect fuzzy score).
+  return sameRef || (sameDate && (sameMerchant || similarity >= 0.985));
+}
+
+/** How many open alerts are exact (100%) duplicates — for the merge button label. */
+export function countExactDuplicates(): number {
+  return listAlerts('open').filter((al) => isExactDuplicate(getTransaction(al.txn_a), getTransaction(al.txn_b), al.similarity))
+    .length;
+}
+
+/**
+ * Merge every open alert that is an exact (100%) duplicate — same amount, same
+ * currency, and same invoice number OR same day+merchant — into one ledger
+ * entry, and resolve those alerts. Genuine double charges (different day, fuzzy
+ * merchant) are left untouched. Grouped via union-find so triples collapse too.
+ */
+export function mergeExactDuplicates(): { merged: number; groups: number } {
+  const open = listAlerts('open');
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    let r = x;
+    while (parent.get(r) && parent.get(r) !== r) r = parent.get(r)!;
+    parent.set(x, r);
+    return r;
+  };
+  const union = (x: string, y: string): void => {
+    if (!parent.has(x)) parent.set(x, x);
+    if (!parent.has(y)) parent.set(y, y);
+    parent.set(find(x), find(y));
+  };
+
+  const resolvedAlerts: string[] = [];
+  for (const al of open) {
+    if (isExactDuplicate(getTransaction(al.txn_a), getTransaction(al.txn_b), al.similarity)) {
+      union(al.txn_a, al.txn_b);
+      resolvedAlerts.push(al.id);
+    }
+  }
+
+  const groups = new Map<string, string[]>();
+  for (const id of parent.keys()) {
+    const root = find(id);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root)!.push(id);
+  }
+
+  let merged = 0;
+  let groupCount = 0;
+  for (const ids of groups.values()) {
+    if (ids.length < 2) continue;
+    if (mergeManual(ids)) {
+      merged += ids.length - 1;
+      groupCount++;
+    }
+  }
+  for (const id of resolvedAlerts) resolveAlert(id, 'dismissed');
+  return { merged, groups: groupCount };
 }

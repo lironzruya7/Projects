@@ -295,7 +295,9 @@ export const api = {
   runDedup: () => req<{ merges: number; mergedRows: number; alerts: number }>('/api/dedup/run', { method: 'POST' }),
   rebuildDedup: () => req('/api/dedup/rebuild', { method: 'POST' }),
   alerts: (status?: string) =>
-    req<{ alerts: DoubleChargeAlert[] }>(`/api/dedup/alerts${status ? `?status=${status}` : ''}`),
+    req<{ alerts: DoubleChargeAlert[]; exactCount: number }>(`/api/dedup/alerts${status ? `?status=${status}` : ''}`),
+  mergeExactDuplicates: () =>
+    req<{ merged: number; groups: number }>('/api/dedup/merge-exact', { method: 'POST' }),
   resolveAlert: (id: string, status: 'confirmed' | 'dismissed') =>
     req(`/api/dedup/alerts/${id}/resolve`, { method: 'POST', body: JSON.stringify({ status }) }),
   unmerge: (id: string) => req('/api/dedup/unmerge', { method: 'POST', body: JSON.stringify({ id }) }),

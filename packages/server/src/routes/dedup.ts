@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
+  countExactDuplicates,
   listAlerts,
+  mergeExactDuplicates,
   mergeManual,
   resolveAlert,
   runDedup,
@@ -33,7 +35,12 @@ export async function dedupRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/dedup/alerts', async (req) => {
     const q = z.object({ status: z.string().optional() }).parse(req.query);
-    return { alerts: listAlerts(q.status) };
+    return { alerts: listAlerts(q.status), exactCount: countExactDuplicates() };
+  });
+
+  // One-click merge of every exact (100%) duplicate alert.
+  app.post('/api/dedup/merge-exact', async () => {
+    return mergeExactDuplicates();
   });
 
   app.post('/api/dedup/alerts/:id/resolve', async (req) => {

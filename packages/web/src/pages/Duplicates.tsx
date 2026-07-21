@@ -10,12 +10,25 @@ export function Duplicates(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [showResolved, setShowResolved] = useState(false);
+  const [exactCount, setExactCount] = useState(0);
 
   async function load(): Promise<void> {
     setLoading(true);
     const res = await api.alerts(showResolved ? undefined : 'open');
     setAlerts(res.alerts);
+    setExactCount(res.exactCount);
     setLoading(false);
+  }
+
+  async function mergeExact(): Promise<void> {
+    setBusy(true);
+    try {
+      const r = await api.mergeExactDuplicates();
+      setMsg(`Merged ${r.merged} exact duplicate${r.merged === 1 ? '' : 's'} into ${r.groups} entr${r.groups === 1 ? 'y' : 'ies'}.`);
+      await load();
+    } finally {
+      setBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -50,6 +63,18 @@ export function Duplicates(): JSX.Element {
           </Button>
         </div>
       </div>
+
+      {exactCount > 0 && (
+        <Card className="border-emerald-500/40 flex items-center justify-between gap-3 flex-wrap">
+          <div className="text-sm">
+            <span className="font-medium text-emerald-300">{exactCount} exact (100%) duplicate{exactCount === 1 ? '' : 's'}</span>{' '}
+            <span className="text-muted">— same amount &amp; invoice/day+merchant. Safe to merge into one entry.</span>
+          </div>
+          <Button onClick={mergeExact} disabled={busy}>
+            {busy ? 'Merging…' : `Merge all ${exactCount} exact duplicates`}
+          </Button>
+        </Card>
+      )}
 
       <Card>
         <p className="text-sm text-muted">
