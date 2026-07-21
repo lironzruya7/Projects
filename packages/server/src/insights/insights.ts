@@ -51,6 +51,7 @@ function addMonths(ym: string, delta: number): string {
 export interface DashboardSummary {
   currency: string;
   referenceMonth: string;
+  income: { total: number; salary: number; other: number };
   totals: {
     thisMonth: number;
     lastMonth: number;
@@ -173,12 +174,19 @@ export function buildDashboard(filter: DashboardFilter = {}): DashboardSummary {
   }
   const byAccount = [...acctMap.values()].sort((a, b) => b.amount - a.amount);
 
+  // Income split for the reference month: salary vs everything else.
+  const refIncome = all.filter((t) => isIncome(t) && monthKey(t.date) === ref);
+  const incomeTotal = refIncome.reduce((s, t) => s + mag(t), 0);
+  const salary = refIncome.filter((t) => t.category === 'Salary').reduce((s, t) => s + mag(t), 0);
+  const income = { total: incomeTotal, salary, other: incomeTotal - salary };
+
   const openAlerts = listAlerts('open').length;
 
   return {
     currency,
     referenceMonth: ref,
     totals: { thisMonth, lastMonth, threeMonthAvg, momChangePct },
+    income,
     categoryBreakdown,
     spendOverTime,
     topMerchants,

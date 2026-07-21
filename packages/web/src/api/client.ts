@@ -79,6 +79,7 @@ export interface ImportPreview {
 export interface DashboardSummary {
   currency: string;
   referenceMonth: string;
+  income: { total: number; salary: number; other: number };
   totals: { thisMonth: number; lastMonth: number; threeMonthAvg: number; momChangePct: number | null };
   categoryBreakdown: Array<{ category: string; amount: number; count: number }>;
   spendOverTime: Array<{ month: string; expense: number; income: number }>;

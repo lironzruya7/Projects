@@ -44,10 +44,14 @@ export function Dashboard(): JSX.Element {
 
   const { totals, currency } = data;
   const empty = data.counts.ledger === 0;
-  // Income / net for the reference month, from the cash-flow series.
+  // Income / net for the reference month (income split into salary vs other).
   const refFlow = data.cashFlow.find((c) => c.month === data.referenceMonth);
-  const incomeThisMonth = refFlow?.income ?? 0;
+  const incomeThisMonth = data.income?.total ?? refFlow?.income ?? 0;
   const netThisMonth = refFlow?.net ?? incomeThisMonth - totals.thisMonth;
+  const incomeSub =
+    data.income && data.income.salary > 0
+      ? `${formatMoney(data.income.salary, currency)} salary${data.income.other > 0.5 ? ` · ${formatMoney(data.income.other, currency)} other` : ''}`
+      : 'tap to see deposits';
   const cur = month ?? data.referenceMonth;
   const canPrev = cur > data.range.min;
   const canNext = cur < data.range.max;
@@ -138,7 +142,7 @@ export function Dashboard(): JSX.Element {
           value={formatMoney(incomeThisMonth, currency)}
           tint="#34d399"
           icon="＋"
-          sub="tap to see deposits"
+          sub={incomeSub}
           onClick={() => nav(`/transactions?from=${data.referenceMonth}-01&to=${data.referenceMonth}-31&flow=in`)}
         />
         <StatCard

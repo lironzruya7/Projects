@@ -80,23 +80,24 @@ function salaryPayers(): string[] {
   return list.map((x) => x.trim()).filter(Boolean);
 }
 
-/** A positive bank credit that is a salary transfer from a known payer. */
+/** A positive bank credit that is a salary — by the word "משכורת"/salary or a known payer. */
 export function isSalary(t: Transaction): boolean {
   if (t.sourceType !== 'bank' || t.amount <= 0) return false;
   const hay = `${t.merchantRaw} ${t.description} ${t.merchantNormalized}`;
+  if (/משכורת|משכרת|\bsalary\b|\bpayroll\b/i.test(hay)) return true;
   return salaryPayers().some((p) => p && hay.includes(p));
 }
 
 /**
- * Tag incoming salary transfers as `Income` so they read as salary, not a
- * generic deposit or transfer. Never overrides a manual choice. Idempotent.
+ * Tag incoming salaries with the `Salary` category (kept separate from other
+ * income). Never overrides a manual choice. Idempotent.
  */
 export function applySalaryCategory(): number {
   const db = getDb();
   const credits = allPrimary().filter((t) => t.sourceType === 'bank' && t.amount > 0);
   const upd = db.prepare(
-    `UPDATE transactions SET category = 'Income', category_source = 'rule'
-     WHERE id = ? AND category_source != 'manual' AND (category IS NULL OR category != 'Income')`,
+    `UPDATE transactions SET category = 'Salary', category_source = 'rule'
+     WHERE id = ? AND category_source != 'manual' AND (category IS NULL OR category = 'Income' OR category != 'Salary')`,
   );
   let changed = 0;
   const tx = db.transaction(() => {

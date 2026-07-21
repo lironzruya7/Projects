@@ -55,6 +55,7 @@ function seed(db: Database.Database): void {
     ['Subscriptions', 90],
     ['Travel', 100],
     ['Fees', 110],
+    ['Salary', 115],
     ['Income', 120],
     ['Transfers', 130],
     ['Other', 140],
