@@ -80,6 +80,34 @@ function salaryPayers(): string[] {
   return list.map((x) => x.trim()).filter(Boolean);
 }
 
+// Mandatory living costs: municipal tax (ארנונה), water, electricity, gas, mortgage.
+// Kept specific to avoid false hits (e.g. "מחסני חשמל" the electronics chain).
+const LIVING_COST_RE =
+  /ארנונה|arnona|עיריי[ית]|עירייה|מועצה\s*(?:מקומית|אזורית)|תאגיד\s*מים|מי\s*אביבים|מי\s*חדרה|מקורות|מיתב|הגיחון|מעיינות\s*העמק|פלגי\s*מוצקין|חברת\s*ה?חשמל|חח["״'`]?י|\biec\b|משכנת[אה]|mortgage|סופרגז|פז\s*גז|פזגז|אמישראגז|דור\s*גז|דורגז/i;
+
+/** A mandatory living-cost charge (arnona / water / electricity / gas / mortgage). */
+export function isLivingCost(t: Transaction): boolean {
+  if (t.amount >= 0) return false;
+  const hay = `${t.merchantRaw} ${t.description} ${t.merchantNormalized}`;
+  return LIVING_COST_RE.test(hay);
+}
+
+/** Tag mandatory living costs with the `Cost of Living` category. Never overrides manual. */
+export function applyLivingCostCategory(): number {
+  const db = getDb();
+  const debits = allPrimary().filter((t) => t.amount < 0);
+  const upd = db.prepare(
+    `UPDATE transactions SET category = 'Cost of Living', category_source = 'rule'
+     WHERE id = ? AND category_source != 'manual' AND (category IS NULL OR category = 'Uncategorized' OR category NOT IN ('Cost of Living','Transfers'))`,
+  );
+  let changed = 0;
+  const tx = db.transaction(() => {
+    for (const t of debits) if (isLivingCost(t)) changed += upd.run(t.id).changes;
+  });
+  tx();
+  return changed;
+}
+
 /** A positive bank credit that is a salary — by the word "משכורת"/salary or a known payer. */
 export function isSalary(t: Transaction): boolean {
   if (t.sourceType !== 'bank' || t.amount <= 0) return false;

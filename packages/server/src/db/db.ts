@@ -48,6 +48,7 @@ function seed(db: Database.Database): void {
     ['Dining', 20],
     ['Transport', 30],
     ['Utilities', 40],
+    ['Cost of Living', 45],
     ['Housing', 50],
     ['Shopping', 60],
     ['Health', 70],

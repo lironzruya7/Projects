@@ -5,7 +5,7 @@ import { daysBetween } from '../parsers/date.js';
 import { tokenSetRatio } from '../normalize/merchant.js';
 import type { DedupSettings, Transaction } from '../models/types.js';
 import { allPrimary, getTransaction } from '../repo/transactions.js';
-import { applySalaryCategory, applySettlementCategory } from '../reconcile/reconcile.js';
+import { applyLivingCostCategory, applySalaryCategory, applySettlementCategory } from '../reconcile/reconcile.js';
 
 const DEFAULT_DEDUP: DedupSettings = {
   amountTolerancePct: 0.5,
@@ -201,6 +201,8 @@ export function runDedup(): DedupResult {
   applySettlementCategory();
   // Tag known incoming salary transfers as Income.
   applySalaryCategory();
+  // Tag mandatory living costs (arnona / water / electricity / gas / mortgage).
+  applyLivingCostCategory();
 
   return { merges, mergedRows, alerts };
 }
