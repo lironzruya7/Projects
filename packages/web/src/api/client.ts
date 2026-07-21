@@ -149,10 +149,12 @@ export interface EmailTestResult {
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, {
-    ...init,
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
-  });
+  // Only set a JSON content-type when there's actually a body. Sending
+  // `content-type: application/json` with an empty body (e.g. a bodyless
+  // DELETE) makes Fastify reject the request with 400 "Body cannot be empty".
+  const headers: Record<string, string> = { ...((init?.headers as Record<string, string>) ?? {}) };
+  if (init?.body != null) headers['content-type'] = 'application/json';
+  const res = await fetch(path, { ...init, headers });
   if (!res.ok) {
     let msg = `${res.status} ${res.statusText}`;
     try {
