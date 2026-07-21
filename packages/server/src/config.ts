@@ -21,9 +21,14 @@ function envStr(key: string, fallback = ''): string {
 export const config = {
   repoRoot,
   port: Number(envStr('PORT', '4000')),
-  // Bind address. Default 127.0.0.1 (safe: only local + `tailscale serve`).
-  // Set HOST=0.0.0.0 to listen on all interfaces (then firewall the port yourself).
-  host: envStr('HOST', '127.0.0.1'),
+  // Bind address. Default 0.0.0.0 so the server is reachable over the tailnet by
+  // IP (in addition to `tailscale serve`, which proxies to 127.0.0.1 and keeps
+  // working). Firewall the port to your tailnet — only /api/export.json is token
+  // protected; the rest of the API is not. Set HOST=127.0.0.1 to bind local-only.
+  host: envStr('HOST', '0.0.0.0'),
+  // Bearer token for the read-only external export at GET /api/export.json.
+  // When empty, that endpoint returns 401 for everyone.
+  readToken: envStr('FINANCE_READ_TOKEN'),
   // Serve the built frontend from the backend (single origin) when its dist exists.
   // Forced on when NODE_ENV=production.
   production: envStr('NODE_ENV') === 'production',
