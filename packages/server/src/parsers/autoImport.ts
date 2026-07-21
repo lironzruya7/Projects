@@ -44,10 +44,15 @@ export async function autoParseFile(
   const remembered = getMapping(preview.signature);
   const provider = remembered?.provider ?? preview.suggestion.provider;
 
+  let amountMode = remembered?.amountMode ?? preview.suggestion.amountMode;
+  // In card mode, a single positive "amount / סכום חיוב" column means charges,
+  // which are outflows — flip the sign so they don't land as income.
+  if (!remembered && sourceType === 'card' && amountMode === 'signed') amountMode = 'flip_sign';
+
   const cfg = remembered
     ? {
         mapping: remembered.mapping,
-        amountMode: remembered.amountMode,
+        amountMode,
         dateFormat: remembered.dateFormat ?? preview.detectedDateFormat,
         headerRow: remembered.headerRow,
         provider,
@@ -55,7 +60,7 @@ export async function autoParseFile(
       }
     : {
         mapping: preview.suggestion.mapping,
-        amountMode: preview.suggestion.amountMode,
+        amountMode,
         dateFormat: preview.detectedDateFormat,
         headerRow: preview.headerRow,
         provider,

@@ -66,6 +66,7 @@ export const ColumnMapping = z.object({
   merchant: z.string().nullable().optional(),
   currency: z.string().nullable().optional(),
   type: z.string().nullable().optional(),
+  reference: z.string().nullable().optional(),
 });
 export type ColumnMapping = z.infer<typeof ColumnMapping>;
 

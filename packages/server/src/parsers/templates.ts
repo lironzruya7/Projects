@@ -15,6 +15,7 @@ const KEYWORDS = {
   currency: ['מטבע עסקה', 'מטבע חיוב', 'מטבע', 'currency'],
   type: ['סוג עסקה', 'סוג', 'type'],
   balance: ['יתרה', 'balance'],
+  reference: ['מספר זיהוי עיסקה', 'מספר זיהוי עסקה', 'אסמכתא', 'מספר עסקה', 'מס עסקה', 'reference', 'ref'],
 } as const;
 
 export interface ProviderTemplate {
@@ -106,6 +107,7 @@ export function suggestMapping(header: string[]): MappingSuggestion {
     description: description ?? merchant,
     currency: findColumn(header, KEYWORDS.currency),
     type: findColumn(header, KEYWORDS.type),
+    reference: findColumn(header, KEYWORDS.reference),
   };
 
   let amountMode: AmountMode;

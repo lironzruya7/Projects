@@ -115,6 +115,7 @@ export function applyMapping(
     description: colIndex(cfg.mapping.description),
     currency: colIndex(cfg.mapping.currency),
     type: colIndex(cfg.mapping.type),
+    reference: colIndex(cfg.mapping.reference),
   };
 
   const dateFmt: DateFormat = (cfg.dateFormat as DateFormat) || 'auto';
@@ -150,6 +151,7 @@ export function applyMapping(
       '';
     const currency = (idx.currency >= 0 ? normalizeCurrency(row[idx.currency]) : '') || config.defaultCurrency;
 
+    const externalId = idx.reference >= 0 ? (row[idx.reference] ?? '').trim() || null : null;
     const candidate = {
       date: isoDate,
       amount,
@@ -158,6 +160,7 @@ export function applyMapping(
       description: description.trim(),
       sourceType: cfg.sourceType,
       sourceProvider: cfg.provider ?? null,
+      externalId,
       sourceRef: `${filename}#${headerRow + 1 + i + 1}`,
       rawAmount: idx.amount >= 0 ? row[idx.amount] : idx.debit >= 0 || idx.credit >= 0 ? `${row[idx.debit] ?? ''}/${row[idx.credit] ?? ''}` : String(amount),
       raw: Object.fromEntries(header.map((h, hi) => [h || `col${hi}`, row[hi] ?? ''])),
