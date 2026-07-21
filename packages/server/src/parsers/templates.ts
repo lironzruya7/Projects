@@ -12,10 +12,11 @@ const KEYWORDS = {
   credit: ['זכות', 'credit'],
   merchant: ['שם בית העסק', 'שם בית עסק', 'בית העסק', 'בית עסק', 'שם העסק', 'merchant', 'business', 'payee'],
   description: ['תיאור פעולה', 'תיאור', 'פרטים', 'פירוט', 'פירוט נוסף', 'הערות', 'description', 'details', 'memo'],
-  currency: ['מטבע עסקה', 'מטבע חיוב', 'מטבע', 'currency'],
+  // Prefer the *charged* currency so it matches the "סכום חיוב" amount we use.
+  currency: ['מטבע חיוב', 'מטבע עסקה', 'מטבע', 'currency'],
   type: ['סוג עסקה', 'סוג', 'type'],
   balance: ['יתרה', 'balance'],
-  reference: ['מספר זיהוי עיסקה', 'מספר זיהוי עסקה', 'אסמכתא', 'מספר עסקה', 'מס עסקה', 'reference', 'ref'],
+  reference: ['מספר זיהוי עיסקה', 'מספר זיהוי עסקה', 'מס שובר', 'שובר', 'אסמכתא', 'מספר עסקה', 'מס עסקה', 'reference', 'ref'],
 } as const;
 
 export interface ProviderTemplate {
