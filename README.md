@@ -39,9 +39,11 @@ at all**. The `.env` is only needed to unlock Gmail scanning and LLM categorizat
 
 ## How to use it
 
-1. **Import** → upload a bank or card CSV/XLSX. Columns are auto-detected; adjust the
-   mapping if needed and click *Import*. The mapping is remembered per file format, so the
-   next export of the same shape imports in one click.
+1. **Import** → two quick modes, **Credit cards** and **Bank statement**, each accepting
+   **several files at once** in **CSV, Excel, or PDF**. Formats are auto-detected and the
+   mapping is remembered per format. (A single-file importer with a manual column-mapping
+   step is there too, for new/unusual formats.) PDF statement parsing is best-effort — check
+   the rows afterwards.
 2. **Transactions** → the de-duplicated ledger. Click any category to change it (optionally
    creating a rule for that merchant). Rows marked `×N` were merged from several sources —
    expand to see (and un-merge) each one.

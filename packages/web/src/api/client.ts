@@ -188,6 +188,25 @@ export const api = {
       '/api/import/commit',
       { method: 'POST', body: JSON.stringify(body) },
     ),
+  autoImport: async (files: FileList | File[], sourceType: 'card' | 'bank') => {
+    const fd = new FormData();
+    for (const f of Array.from(files)) fd.append('file', f);
+    const res = await fetch(`/api/import/auto?sourceType=${sourceType}`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Import failed');
+    return res.json() as Promise<{
+      results: Array<{
+        filename: string;
+        format?: string;
+        provider?: string | null;
+        imported?: number;
+        skipped?: number;
+        needsManual?: boolean;
+        detail?: string | null;
+        error?: string;
+      }>;
+      dedup: { merges: number; mergedRows: number; alerts: number };
+    }>;
+  },
   batches: () => req<{ batches: any[] }>('/api/import/batches'),
   deleteBatch: (id: string) => req(`/api/import/batches/${id}`, { method: 'DELETE' }),
   clearBatches: (sourceType: 'email' | 'bank' | 'card') =>

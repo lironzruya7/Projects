@@ -31,6 +31,10 @@ export function ImportPage(): JSX.Element {
   const receiptFileRef = useRef<HTMLInputElement>(null);
   const [scanBusy, setScanBusy] = useState(false);
   const [scanMsg, setScanMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const cardFilesRef = useRef<HTMLInputElement>(null);
+  const bankFilesRef = useRef<HTMLInputElement>(null);
+  const [autoBusy, setAutoBusy] = useState(false);
+  const [autoResults, setAutoResults] = useState<Awaited<ReturnType<typeof api.autoImport>> | null>(null);
 
   // Mapping form state
   const [mapping, setMapping] = useState<ColumnMapping>({});
@@ -101,6 +105,22 @@ export function ImportPage(): JSX.Element {
     }
   }
 
+  async function autoImport(files: FileList | null, sourceType: 'card' | 'bank'): Promise<void> {
+    if (!files || files.length === 0) return;
+    setAutoBusy(true);
+    setAutoResults(null);
+    setError(null);
+    try {
+      const res = await api.autoImport(files, sourceType);
+      setAutoResults(res);
+      await loadBatches();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setAutoBusy(false);
+    }
+  }
+
   async function scanReceipt(file: File | undefined): Promise<void> {
     if (!file) return;
     setScanBusy(true);
@@ -129,9 +149,73 @@ export function ImportPage(): JSX.Element {
     <div className="space-y-4">
       <h1 className="hidden md:block text-2xl font-semibold">Import bank / card exports</h1>
       <p className="text-muted text-sm">
-        Upload a CSV or XLSX. Columns are auto-detected for Bank Yahav, Isracard, and Cal — adjust the mapping if
-        needed. The mapping is remembered per file format, so re-imports are one click.
+        Drop your statements below — CSV, Excel, or PDF. Upload several card files at once (all 3 cards together).
+        Formats are auto-detected; the column mapping is remembered per format.
       </p>
+
+      {/* Two quick multi-file modes */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <input ref={cardFilesRef} type="file" multiple accept=".csv,.xlsx,.xls,.xlsm,.pdf" className="hidden" onChange={(e) => autoImport(e.target.files, 'card')} />
+        <input ref={bankFilesRef} type="file" multiple accept=".csv,.xlsx,.xls,.xlsm,.pdf" className="hidden" onChange={(e) => autoImport(e.target.files, 'bank')} />
+        <button
+          disabled={autoBusy}
+          onClick={() => cardFilesRef.current?.click()}
+          className="rounded-2xl border-2 border-dashed border-edge hover:border-brand p-5 text-center active:scale-[0.99] transition-all disabled:opacity-50"
+          style={{ background: 'linear-gradient(135deg, #c084fc18, transparent 60%)' }}
+        >
+          <div className="text-2xl">💳</div>
+          <div className="font-medium mt-1">Credit cards</div>
+          <div className="text-xs text-muted mt-0.5">Upload several files at once · CSV / Excel / PDF</div>
+        </button>
+        <button
+          disabled={autoBusy}
+          onClick={() => bankFilesRef.current?.click()}
+          className="rounded-2xl border-2 border-dashed border-edge hover:border-brand p-5 text-center active:scale-[0.99] transition-all disabled:opacity-50"
+          style={{ background: 'linear-gradient(135deg, #38bdf818, transparent 60%)' }}
+        >
+          <div className="text-2xl">🏦</div>
+          <div className="font-medium mt-1">Bank statement</div>
+          <div className="text-xs text-muted mt-0.5">Backup / cross-check · CSV / Excel / PDF</div>
+        </button>
+      </div>
+
+      {autoBusy && <Card><Spinner label="Reading files…" /></Card>}
+
+      {autoResults && (
+        <Card className="border-emerald-500/40">
+          <div className="font-medium mb-2">
+            Imported {autoResults.results.reduce((s, r) => s + (r.imported ?? 0), 0)} transactions from{' '}
+            {autoResults.results.length} file(s)
+          </div>
+          <div className="space-y-1">
+            {autoResults.results.map((r, i) => (
+              <div key={i} className="flex items-center justify-between gap-2 text-sm border-b border-edge/40 py-1.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Badge tone={r.format === 'pdf' ? 'warn' : 'default'}>{r.format ?? 'file'}</Badge>
+                  <Bidi className="truncate">{r.filename}</Bidi>
+                </div>
+                <div className="text-xs whitespace-nowrap">
+                  {r.error ? (
+                    <span className="text-rose-400">{r.error}</span>
+                  ) : r.needsManual ? (
+                    <span className="text-amber-300">needs manual mapping</span>
+                  ) : (
+                    <span className="text-emerald-400">{r.imported} imported{r.skipped ? ` · ${r.skipped} skipped` : ''}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="text-xs text-muted mt-2">
+            Dedup: merged {autoResults.dedup.mergedRows} rows · {autoResults.dedup.alerts} alerts. PDF rows are
+            best-effort — check them in Transactions and delete the batch if a file parsed wrong.
+          </div>
+        </Card>
+      )}
+
+      <div className="text-xs text-muted">
+        Need to map columns by hand (a new/unusual format)? Use the single-file importer below.
+      </div>
 
       {/* Scan a receipt with the camera → OCR → auto-added & deduped */}
       <Card style={{ background: 'linear-gradient(135deg, #4ade8018, transparent 60%)' }}>

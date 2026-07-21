@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ColumnMapping, AmountMode } from '../models/types.js';
 import { applyMapping, buildPreview, fingerprint } from '../parsers/fileImport.js';
+import { autoParseFile } from '../parsers/autoImport.js';
 import { readGrid } from '../parsers/tabular.js';
 import { getMapping, listMappings, saveMapping } from '../repo/mappings.js';
 import { createBatch, deleteBatch, deleteBatchesBySource, listBatches, setBatchRowCount } from '../repo/batches.js';
@@ -83,6 +84,45 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
       dedup,
       batchId,
     };
+  });
+
+  // Multi-file auto import: upload several card/bank statements at once
+  // (CSV/XLSX/PDF). Each is parsed without a mapping step where possible.
+  app.post('/api/import/auto', async (req) => {
+    const sourceType = (req.query as { sourceType?: string }).sourceType === 'bank' ? 'bank' : 'card';
+    const files = req.files();
+    const results: Array<Record<string, unknown>> = [];
+    for await (const file of files) {
+      const buf = await file.toBuffer();
+      try {
+        const r = await autoParseFile(buf, file.filename, sourceType);
+        let imported = 0;
+        if (r.parsed.length > 0) {
+          const batchId = createBatch({
+            sourceType,
+            sourceProvider: r.provider,
+            filename: file.filename,
+            note: `Auto import (${r.format})`,
+          });
+          const ids = insertParsed(r.parsed, batchId);
+          setBatchRowCount(batchId, ids.length);
+          imported = ids.length;
+        }
+        results.push({
+          filename: file.filename,
+          format: r.format,
+          provider: r.provider,
+          imported,
+          skipped: r.skipped,
+          needsManual: r.needsManual,
+          detail: r.detail ?? null,
+        });
+      } catch (err) {
+        results.push({ filename: file.filename, error: (err as Error).message });
+      }
+    }
+    const dedup = runDedup();
+    return { results, dedup };
   });
 
   app.get('/api/import/batches', async () => ({ batches: listBatches() }));
