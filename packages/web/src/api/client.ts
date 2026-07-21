@@ -432,6 +432,7 @@ export const api = {
         amount: number;
         likelyFee: boolean;
         nearest: { accountLabel: string | null; diff: number } | null;
+        cards: string[];
       }>;
     }>('/api/reconcile'),
 

@@ -14,6 +14,13 @@ function monthName(ym: string): string {
 function familyLabel(f: 'isracard' | 'cal'): string {
   return f === 'isracard' ? 'Isracard' : 'Cal / Visa Cal / Diners';
 }
+/** Which card(s) the missing statement belongs to, by last-4 (when known). */
+function cardHint(m: { cards: string[]; nearest: { accountLabel: string | null } | null }): string {
+  if (m.cards.length === 1) return `card ••${m.cards[0]}`;
+  if (m.cards.length > 1) return `card ${m.cards.map((c) => `••${c}`).join(' / ')}`;
+  if (m.nearest?.accountLabel) return `closest ••${m.nearest.accountLabel}`;
+  return '';
+}
 
 /**
  * Credit-card reconciliation: each bank "credit card" settlement line matched to
@@ -87,7 +94,7 @@ export function ReconcileCard({ currency = 'ILS' }: { currency?: string }): JSX.
                       <div key={i} className="flex items-center justify-between gap-2 text-xs">
                         <span className="text-ink">
                           {familyLabel(m.family)} · <b>{monthName(m.month)}</b>
-                          {m.nearest?.accountLabel ? <span className="text-muted"> (closest ••{m.nearest.accountLabel})</span> : null}
+                          {cardHint(m) ? <span className="text-muted"> · {cardHint(m)}</span> : null}
                         </span>
                         <span className="whitespace-nowrap font-semibold text-amber-200">{formatMoney(m.amount, currency)}</span>
                       </div>

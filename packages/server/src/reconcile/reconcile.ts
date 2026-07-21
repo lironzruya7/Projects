@@ -196,6 +196,7 @@ export interface ReconReport {
     amount: number;
     likelyFee: boolean;
     nearest: { accountLabel: string | null; diff: number } | null;
+    cards: string[]; // known last-4s of that family (the missing statement is for one of these)
   }>;
 }
 
@@ -351,20 +352,34 @@ export function buildReconciliation(opts?: { tolPct?: number; tolMinor?: number;
   const unassignedStatements = statements.filter((st) => !consumed.has(st.batchId));
   const matchedCardTotal = matches.reduce((acc, m) => acc + (m.matched?.sum ?? 0), 0);
 
+  // Known cards per family (from imported statements): a missing statement of a
+  // family belongs to one of these last-4s.
+  const familyCards = new Map<'isracard' | 'cal', Set<string>>();
+  for (const st of statements) {
+    if (!st.accountLabel) continue;
+    const fam = cardFamily(st.provider);
+    if (!familyCards.has(fam)) familyCards.set(fam, new Set());
+    familyCards.get(fam)!.add(st.accountLabel);
+  }
+
   // Missing statements: unmatched bank card-lines. Small repeating ones are card
   // fees; larger ones mean that month's card file isn't imported.
   const FEE_MAX = 150;
   const missing = matches
     .filter((m) => m.status === 'unmatched')
-    .map((m) => ({
-      date: m.settlement.date,
-      month: m.settlement.date.slice(0, 7),
-      family: (m.settlement.provider ? cardFamily(m.settlement.provider) : 'cal') as 'isracard' | 'cal',
-      provider: m.settlement.provider,
-      amount: Math.abs(m.settlement.amount),
-      likelyFee: Math.abs(m.settlement.amount) < FEE_MAX,
-      nearest: m.nearest ? { accountLabel: m.nearest.accountLabel, diff: m.nearest.diff } : null,
-    }))
+    .map((m) => {
+      const family = (m.settlement.provider ? cardFamily(m.settlement.provider) : 'cal') as 'isracard' | 'cal';
+      return {
+        date: m.settlement.date,
+        month: m.settlement.date.slice(0, 7),
+        family,
+        provider: m.settlement.provider,
+        amount: Math.abs(m.settlement.amount),
+        likelyFee: Math.abs(m.settlement.amount) < FEE_MAX,
+        nearest: m.nearest ? { accountLabel: m.nearest.accountLabel, diff: m.nearest.diff } : null,
+        cards: [...(familyCards.get(family) ?? [])].sort(),
+      };
+    })
     .sort((a, b) => b.amount - a.amount);
 
   return {
