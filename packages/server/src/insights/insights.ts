@@ -8,6 +8,24 @@ const MS_DAY = 86_400_000;
 function monthKey(iso: string): string {
   return iso.slice(0, 7);
 }
+
+/**
+ * Accounting month for a transaction. Salaries are paid on the 1st but can slip
+ * a day or two around holidays/weekends — a salary in the last two days of a
+ * month (e.g. 30/06) belongs to the next month (01/07). Everything else uses its
+ * own calendar month.
+ */
+function effectiveMonth(t: Transaction): string {
+  if (t.category === 'Salary' && t.amount > 0) {
+    const d = new Date(t.date + 'T00:00:00Z');
+    if (!Number.isNaN(d.getTime())) {
+      const day = d.getUTCDate();
+      const daysInMonth = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+      if (day >= daysInMonth - 1) return addMonths(monthKey(t.date), 1);
+    }
+  }
+  return monthKey(t.date);
+}
 function isExpense(t: Transaction): boolean {
   return t.amount < 0 && t.category !== 'Transfers';
 }
@@ -140,7 +158,8 @@ export function buildDashboard(filter: DashboardFilter = {}): DashboardSummary {
   const spendOverTime = months.map((m) => ({
     month: m,
     expense: all.filter((t) => isExpense(t) && monthKey(t.date) === m).reduce((s, t) => s + mag(t), 0),
-    income: all.filter((t) => isIncome(t) && monthKey(t.date) === m).reduce((s, t) => s + mag(t), 0),
+    // Income uses the accounting month so a boundary salary lands in the right month.
+    income: all.filter((t) => isIncome(t) && effectiveMonth(t) === m).reduce((s, t) => s + mag(t), 0),
   }));
   const cashFlow = spendOverTime.map((s) => ({
     month: s.month,
@@ -175,7 +194,7 @@ export function buildDashboard(filter: DashboardFilter = {}): DashboardSummary {
   const byAccount = [...acctMap.values()].sort((a, b) => b.amount - a.amount);
 
   // Income split for the reference month: salary vs everything else.
-  const refIncome = all.filter((t) => isIncome(t) && monthKey(t.date) === ref);
+  const refIncome = all.filter((t) => isIncome(t) && effectiveMonth(t) === ref);
   const incomeTotal = refIncome.reduce((s, t) => s + mag(t), 0);
   const salary = refIncome.filter((t) => t.category === 'Salary').reduce((s, t) => s + mag(t), 0);
   const income = { total: incomeTotal, salary, other: incomeTotal - salary };
