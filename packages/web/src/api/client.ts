@@ -122,6 +122,25 @@ export interface Anomaly {
   alertId?: string;
 }
 
+export interface RecommendationReport {
+  currency: string;
+  monthsAnalyzed: number;
+  totalMonthlySpend: number;
+  topCategories: Array<{ category: string; monthlyAvg: number; pct: number; count: number }>;
+  recurring: RecurringItem[];
+  recurringMonthly: number;
+  recurringAnnual: number;
+  serviceGroups: Array<{
+    key: string;
+    label: string;
+    monthlyCost: number;
+    overlapping: boolean;
+    merchants: Array<{ merchant: string; monthlyCost: number; total: number; count: number }>;
+  }>;
+  recommendations: Array<{ kind: string; title: string; detail: string; monthlySaving: number }>;
+  potentialMonthlySavings: number;
+}
+
 export interface DoubleChargeAlert {
   id: string;
   txn_a: string;
@@ -312,6 +331,7 @@ export const api = {
   },
   recurring: () => req<{ recurring: RecurringItem[] }>('/api/insights/recurring'),
   anomalies: () => req<{ anomalies: Anomaly[] }>('/api/insights/anomalies'),
+  recommendations: () => req<RecommendationReport>('/api/insights/recommendations'),
   accounts: () => req<{ accounts: Account[] }>('/api/accounts'),
   currencies: () => req<{ currencies: Array<{ currency: string; count: number }> }>('/api/currencies'),
 
