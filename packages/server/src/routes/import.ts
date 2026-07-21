@@ -6,7 +6,7 @@ import { autoParseFile } from '../parsers/autoImport.js';
 import { readGrid } from '../parsers/tabular.js';
 import { getMapping, listMappings, saveMapping } from '../repo/mappings.js';
 import { createHash } from 'node:crypto';
-import { createBatch, deleteBatch, deleteBatchesBySource, findBatchByHash, findDuplicateBatchGroups, listBatches, setBatchPeriod, setBatchProvider, setBatchRowCount } from '../repo/batches.js';
+import { createBatch, deleteBatch, deleteBatchesBySource, findBatchByHash, findDuplicateBatchGroups, listBatches, setBatchAccountLabel, setBatchPeriod, setBatchProvider, setBatchRowCount } from '../repo/batches.js';
 import { insertParsed } from '../repo/transactions.js';
 import { runDedup } from '../dedup/engine.js';
 import { getUpload, putUpload } from '../util/uploadCache.js';
@@ -194,6 +194,14 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ period: z.string() }).parse(req.body);
     setBatchPeriod(id, body.period);
     return { ok: true };
+  });
+
+  // Fix a card's last-4 tag (e.g. a mis-detected "235" -> "3235"), cascading to its rows.
+  app.put('/api/import/batches/:id/label', async (req) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({ label: z.string() }).parse(req.body);
+    const updated = setBatchAccountLabel(id, body.label);
+    return { ok: true, updated };
   });
 
   app.delete('/api/import/batches/:id', async (req) => {

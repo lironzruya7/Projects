@@ -57,6 +57,17 @@ export function setBatchPeriod(id: string, period: string | null): void {
   getDb().prepare(`UPDATE import_batches SET period = ? WHERE id = ?`).run(p, id);
 }
 
+/** Set a batch's card tag (last-4/nickname) and cascade to its transactions. Returns rows updated. */
+export function setBatchAccountLabel(id: string, label: string | null): number {
+  const db = getDb();
+  const l = label && label.trim() ? label.trim() : null;
+  const tx = db.transaction(() => {
+    db.prepare(`UPDATE import_batches SET account_label = ? WHERE id = ?`).run(l, id);
+    return db.prepare(`UPDATE transactions SET account_label = ? WHERE import_batch = ?`).run(l, id).changes;
+  });
+  return tx();
+}
+
 export interface DuplicateBatch {
   id: string;
   filename: string | null;

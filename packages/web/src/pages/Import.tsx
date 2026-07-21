@@ -619,7 +619,28 @@ export function ImportPage(): JSX.Element {
                           </option>
                         ))}
                       </select>
-                      {b.account_label && <span className="text-muted text-xs">••{b.account_label}</span>}
+                      <input
+                        className="input !py-0.5 !px-1 text-xs w-16"
+                        inputMode="numeric"
+                        placeholder="••last4"
+                        defaultValue={b.account_label ?? ''}
+                        disabled={busy}
+                        title="Card last 4 digits"
+                        onBlur={async (e) => {
+                          if ((e.target.value ?? '') === (b.account_label ?? '')) return;
+                          setBusy(true);
+                          setError(null);
+                          try {
+                            await api.setBatchLabel(b.id, e.target.value);
+                            setHistoryMsg('Card number updated.');
+                            await loadBatches();
+                          } catch (err) {
+                            setError((err as Error).message);
+                          } finally {
+                            setBusy(false);
+                          }
+                        }}
+                      />
                     </span>
                   ) : (
                     (b.source_provider || b.account_label) && (

@@ -403,6 +403,8 @@ export const api = {
     }),
   setBatchPeriod: (id: string, period: string) =>
     req<{ ok: boolean }>(`/api/import/batches/${id}/period`, { method: 'PUT', body: JSON.stringify({ period }) }),
+  setBatchLabel: (id: string, label: string) =>
+    req<{ ok: boolean; updated: number }>(`/api/import/batches/${id}/label`, { method: 'PUT', body: JSON.stringify({ label }) }),
   duplicateBatches: () =>
     req<{
       groups: Array<
