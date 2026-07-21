@@ -186,6 +186,7 @@ export interface ReconReport {
   matchedCardTotal: number; // sum of card items tied to a settlement
   unassignedCardTotal: number; // card charges not tied to any settlement
   unassignedCardCount: number;
+  unmatchedSettlementTotal: number; // bank card-lines with no imported statement (maybe missing spend)
 }
 
 /** Card family a provider belongs to, as the bank groups them. */
@@ -270,8 +271,8 @@ function findSubset(
  * billing dates.
  */
 export function buildReconciliation(opts?: { tolPct?: number; tolMinor?: number; maxLagDays?: number }): ReconReport {
-  const tolPct = opts?.tolPct ?? 1; // fees / rounding slack
-  const tolMinor = opts?.tolMinor ?? 20; // ₪ absolute slack
+  const tolPct = opts?.tolPct ?? 1.5; // fees / rounding slack
+  const tolMinor = opts?.tolMinor ?? 35; // ₪ absolute slack
   const maxLagDays = opts?.maxLagDays ?? 55; // purchase→billing lag
 
   const primaries = allPrimary();
@@ -348,5 +349,6 @@ export function buildReconciliation(opts?: { tolPct?: number; tolMinor?: number;
     matchedCardTotal,
     unassignedCardTotal: unassignedStatements.reduce((acc, st) => acc + st.total, 0),
     unassignedCardCount: unassignedStatements.reduce((acc, st) => acc + st.count, 0),
+    unmatchedSettlementTotal: matches.filter((m) => m.status === 'unmatched').reduce((acc, m) => acc + Math.abs(m.settlement.amount), 0),
   };
 }

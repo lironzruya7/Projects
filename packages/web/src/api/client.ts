@@ -423,6 +423,7 @@ export const api = {
       matchedCardTotal: number;
       unassignedCardTotal: number;
       unassignedCardCount: number;
+      unmatchedSettlementTotal: number;
     }>('/api/reconcile'),
 
   // Settings / data

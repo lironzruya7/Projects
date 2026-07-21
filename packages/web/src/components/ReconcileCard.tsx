@@ -68,6 +68,14 @@ export function ReconcileCard({ currency = 'ILS' }: { currency?: string }): JSX.
                 />
               </div>
 
+              {data.unmatchedSettlementTotal > 0 && (
+                <div className="mb-3 text-xs rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-200">
+                  ⚠️ {formatMoney(data.unmatchedSettlementTotal, currency)} of bank card-lines aren't matched to a card
+                  file. Large ones usually mean that month's card statement isn't imported yet — so that spending is
+                  missing from your totals. Import those files. (Small repeating ones are card fees.)
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 {data.matches.map((m) => {
                   const color = accountColor(m.matched?.provider ?? m.settlement.provider, 'card', m.matched?.accountLabel);
