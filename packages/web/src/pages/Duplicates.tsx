@@ -49,6 +49,11 @@ export function Duplicates(): JSX.Element {
     await load();
   }
 
+  async function merge(id: string): Promise<void> {
+    await api.mergeAlert(id);
+    await load();
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -82,7 +87,9 @@ export function Duplicates(): JSX.Element {
           card, and email) are merged automatically into one ledger entry — expand any <Badge tone="good">×N</Badge>{' '}
           row in Transactions to see and un-merge its sources. Below are{' '}
           <span className="text-ink font-medium">suspected true double charges</span>: the same merchant billing you
-          twice from the same source. These are never merged — confirm or dismiss each.
+          twice from the same source. If it's actually one charge seen twice, <b>Merge into one</b>; if it's a real
+          double charge keep it; otherwise dismiss. "100% match" means the amount &amp; merchant are identical — the
+          dates may still differ by a day or two.
         </p>
       </Card>
 
@@ -113,8 +120,9 @@ export function Duplicates(): JSX.Element {
                 </div>
                 {a.status === 'open' && (
                   <div className="flex flex-col gap-2 shrink-0">
+                    <Button onClick={() => merge(a.id)}>Merge into one</Button>
                     <Button variant="danger" onClick={() => resolve(a.id, 'confirmed')}>
-                      Confirm double charge
+                      Keep — real double charge
                     </Button>
                     <Button variant="ghost" onClick={() => resolve(a.id, 'dismissed')}>
                       Dismiss

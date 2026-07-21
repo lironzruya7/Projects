@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   countExactDuplicates,
   listAlerts,
+  mergeAlert,
   mergeExactDuplicates,
   mergeManual,
   resolveAlert,
@@ -48,6 +49,12 @@ export async function dedupRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ status: z.enum(['confirmed', 'dismissed']) }).parse(req.body);
     resolveAlert(id, body.status);
     return { ok: true };
+  });
+
+  // Merge one alert's two transactions into a single entry (and close the alert).
+  app.post('/api/dedup/alerts/:id/merge', async (req) => {
+    const { id } = req.params as { id: string };
+    return mergeAlert(id);
   });
 
   app.post('/api/dedup/merge', async (req) => {

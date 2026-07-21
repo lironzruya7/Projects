@@ -321,6 +321,7 @@ export const api = {
     req<{ merged: number; groups: number }>('/api/dedup/merge-exact', { method: 'POST' }),
   resolveAlert: (id: string, status: 'confirmed' | 'dismissed') =>
     req(`/api/dedup/alerts/${id}/resolve`, { method: 'POST', body: JSON.stringify({ status }) }),
+  mergeAlert: (id: string) => req<{ ok: boolean; primary: string | null }>(`/api/dedup/alerts/${id}/merge`, { method: 'POST' }),
   unmerge: (id: string) => req('/api/dedup/unmerge', { method: 'POST', body: JSON.stringify({ id }) }),
   mergeManual: (ids: string[]) => req('/api/dedup/merge', { method: 'POST', body: JSON.stringify({ ids }) }),
 

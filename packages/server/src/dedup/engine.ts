@@ -270,6 +270,17 @@ export function resolveAlert(id: string, status: 'confirmed' | 'dismissed'): voi
   getDb().prepare(`UPDATE double_charge_alerts SET status = ? WHERE id = ?`).run(status, id);
 }
 
+/** Merge the two transactions of one alert into a single entry and close the alert. */
+export function mergeAlert(id: string): { ok: boolean; primary: string | null } {
+  const row = getDb()
+    .prepare(`SELECT txn_a, txn_b FROM double_charge_alerts WHERE id = ?`)
+    .get(id) as { txn_a: string; txn_b: string } | undefined;
+  if (!row) return { ok: false, primary: null };
+  const primary = mergeManual([row.txn_a, row.txn_b]);
+  resolveAlert(id, 'dismissed');
+  return { ok: Boolean(primary), primary };
+}
+
 /** A pair that is certainly the same transaction (not a genuine double charge). */
 function isExactDuplicate(a: Transaction | null, b: Transaction | null, similarity: number): boolean {
   if (!a || !b || a.mergedInto || b.mergedInto) return false;
