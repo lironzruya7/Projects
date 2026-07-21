@@ -187,6 +187,16 @@ export interface ReconReport {
   unassignedCardTotal: number; // card charges not tied to any settlement
   unassignedCardCount: number;
   unmatchedSettlementTotal: number; // bank card-lines with no imported statement (maybe missing spend)
+  // Which card statements look missing — import these so nothing is unreconciled.
+  missing: Array<{
+    date: string;
+    month: string;
+    family: 'isracard' | 'cal';
+    provider: string | null;
+    amount: number;
+    likelyFee: boolean;
+    nearest: { accountLabel: string | null; diff: number } | null;
+  }>;
 }
 
 /** Card family a provider belongs to, as the bank groups them. */
@@ -341,6 +351,22 @@ export function buildReconciliation(opts?: { tolPct?: number; tolMinor?: number;
   const unassignedStatements = statements.filter((st) => !consumed.has(st.batchId));
   const matchedCardTotal = matches.reduce((acc, m) => acc + (m.matched?.sum ?? 0), 0);
 
+  // Missing statements: unmatched bank card-lines. Small repeating ones are card
+  // fees; larger ones mean that month's card file isn't imported.
+  const FEE_MAX = 150;
+  const missing = matches
+    .filter((m) => m.status === 'unmatched')
+    .map((m) => ({
+      date: m.settlement.date,
+      month: m.settlement.date.slice(0, 7),
+      family: (m.settlement.provider ? cardFamily(m.settlement.provider) : 'cal') as 'isracard' | 'cal',
+      provider: m.settlement.provider,
+      amount: Math.abs(m.settlement.amount),
+      likelyFee: Math.abs(m.settlement.amount) < FEE_MAX,
+      nearest: m.nearest ? { accountLabel: m.nearest.accountLabel, diff: m.nearest.diff } : null,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
   return {
     matches: matches.sort((a, b) => b.settlement.date.localeCompare(a.settlement.date)),
     settlementCount: settlements.length,
@@ -350,5 +376,6 @@ export function buildReconciliation(opts?: { tolPct?: number; tolMinor?: number;
     unassignedCardTotal: unassignedStatements.reduce((acc, st) => acc + st.total, 0),
     unassignedCardCount: unassignedStatements.reduce((acc, st) => acc + st.count, 0),
     unmatchedSettlementTotal: matches.filter((m) => m.status === 'unmatched').reduce((acc, m) => acc + Math.abs(m.settlement.amount), 0),
+    missing,
   };
 }

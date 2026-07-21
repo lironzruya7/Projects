@@ -424,6 +424,15 @@ export const api = {
       unassignedCardTotal: number;
       unassignedCardCount: number;
       unmatchedSettlementTotal: number;
+      missing: Array<{
+        date: string;
+        month: string;
+        family: 'isracard' | 'cal';
+        provider: string | null;
+        amount: number;
+        likelyFee: boolean;
+        nearest: { accountLabel: string | null; diff: number } | null;
+      }>;
     }>('/api/reconcile'),
 
   // Settings / data

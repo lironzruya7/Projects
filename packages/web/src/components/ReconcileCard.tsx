@@ -6,6 +6,15 @@ import { accountColor, accountLabel } from '../lib/accounts';
 
 type Recon = Awaited<ReturnType<typeof api.reconcile>>;
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function monthName(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  return `${MONTHS[(m ?? 1) - 1]} ${y}`;
+}
+function familyLabel(f: 'isracard' | 'cal'): string {
+  return f === 'isracard' ? 'Isracard' : 'Cal / Visa Cal / Diners';
+}
+
 /**
  * Credit-card reconciliation: each bank "credit card" settlement line matched to
  * the itemized card charges that sum to it. Confirms the aggregate bank charge
@@ -68,11 +77,32 @@ export function ReconcileCard({ currency = 'ILS' }: { currency?: string }): JSX.
                 />
               </div>
 
-              {data.unmatchedSettlementTotal > 0 && (
-                <div className="mb-3 text-xs rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-200">
-                  ⚠️ {formatMoney(data.unmatchedSettlementTotal, currency)} of bank card-lines aren't matched to a card
-                  file. Large ones usually mean that month's card statement isn't imported yet — so that spending is
-                  missing from your totals. Import those files. (Small repeating ones are card fees.)
+              {data.missing.filter((m) => !m.likelyFee).length > 0 && (
+                <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+                  <div className="text-xs text-amber-200 font-medium mb-1.5">
+                    ⚠️ Missing card statements — import these so nothing is unreconciled
+                  </div>
+                  <div className="space-y-1">
+                    {data.missing.filter((m) => !m.likelyFee).map((m, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="text-ink">
+                          {familyLabel(m.family)} · <b>{monthName(m.month)}</b>
+                          {m.nearest?.accountLabel ? <span className="text-muted"> (closest ••{m.nearest.accountLabel})</span> : null}
+                        </span>
+                        <span className="whitespace-nowrap font-semibold text-amber-200">{formatMoney(m.amount, currency)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="text-[10px] text-muted mt-1.5">
+                    Each is a bank credit-card charge with no matching card file. Import that card's statement for that
+                    month — until then that spending is missing from your totals.
+                  </div>
+                </div>
+              )}
+              {data.missing.some((m) => m.likelyFee) && (
+                <div className="mb-3 text-[11px] text-muted">
+                  {data.missing.filter((m) => m.likelyFee).length} small unmatched line(s) look like card fees (e.g.{' '}
+                  {formatMoney(data.missing.find((m) => m.likelyFee)!.amount, currency)}/mo) — no card file needed.
                 </div>
               )}
 
