@@ -404,5 +404,10 @@ export const api = {
     req('/api/settings/currency', { method: 'PUT', body: JSON.stringify({ currency }) }),
   setDedup: (body: unknown) => req('/api/settings/dedup', { method: 'PUT', body: JSON.stringify(body) }),
   setAnomaly: (body: unknown) => req('/api/settings/anomaly', { method: 'PUT', body: JSON.stringify(body) }),
+  setSalaryPayers: (payers: string[]) =>
+    req<{ payers: string[]; tagged: number }>('/api/settings/salary', {
+      method: 'PUT',
+      body: JSON.stringify({ payers }),
+    }),
   wipe: () => req('/api/wipe', { method: 'POST', body: JSON.stringify({ confirm: 'DELETE' }) }),
 };

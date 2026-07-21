@@ -5,7 +5,7 @@ import { daysBetween } from '../parsers/date.js';
 import { tokenSetRatio } from '../normalize/merchant.js';
 import type { DedupSettings, Transaction } from '../models/types.js';
 import { allPrimary, getTransaction } from '../repo/transactions.js';
-import { applySettlementCategory } from '../reconcile/reconcile.js';
+import { applySalaryCategory, applySettlementCategory } from '../reconcile/reconcile.js';
 
 const DEFAULT_DEDUP: DedupSettings = {
   amountTolerancePct: 0.5,
@@ -199,6 +199,8 @@ export function runDedup(): DedupResult {
   // Tag bank credit-card settlement lines as Transfers so the aggregate bank
   // charge isn't double-counted against the itemized card purchases.
   applySettlementCategory();
+  // Tag known incoming salary transfers as Income.
+  applySalaryCategory();
 
   return { merges, mergedRows, alerts };
 }

@@ -26,6 +26,16 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     return next;
   });
 
+  // Names on incoming salary transfers, so they get tagged as Income.
+  app.put('/api/settings/salary', async (req) => {
+    const body = z.object({ payers: z.array(z.string()) }).parse(req.body);
+    const payers = body.payers.map((p) => p.trim()).filter(Boolean);
+    setSetting('salary', { payers });
+    const { applySalaryCategory } = await import('../reconcile/reconcile.js');
+    const tagged = applySalaryCategory();
+    return { payers, tagged };
+  });
+
   app.put('/api/settings/anomaly', async (req) => {
     const body = z
       .object({ newMerchantWindowDays: z.number().optional(), spikeMultiplier: z.number().optional() })

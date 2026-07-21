@@ -1,4 +1,4 @@
-import { getDb } from '../db/db.js';
+import { getDb, getSetting } from '../db/db.js';
 import { allPrimary } from '../repo/transactions.js';
 import { daysBetween } from '../parsers/date.js';
 import type { Transaction } from '../models/types.js';
@@ -65,6 +65,42 @@ export function applySettlementCategory(): number {
     for (const t of bankDebits) {
       if (classifySettlement(t).isSettlement) changed += upd.run(t.id).changes;
     }
+  });
+  tx();
+  return changed;
+}
+
+// Names on incoming salary transfers (e.g. "רותם", "לירון"). Editable via the
+// `salary.payers` setting; these are the defaults.
+const DEFAULT_SALARY_PAYERS = ['רותם', 'לירון'];
+
+function salaryPayers(): string[] {
+  const s = getSetting<{ payers?: string[] }>('salary', {});
+  const list = s.payers && s.payers.length ? s.payers : DEFAULT_SALARY_PAYERS;
+  return list.map((x) => x.trim()).filter(Boolean);
+}
+
+/** A positive bank credit that is a salary transfer from a known payer. */
+export function isSalary(t: Transaction): boolean {
+  if (t.sourceType !== 'bank' || t.amount <= 0) return false;
+  const hay = `${t.merchantRaw} ${t.description} ${t.merchantNormalized}`;
+  return salaryPayers().some((p) => p && hay.includes(p));
+}
+
+/**
+ * Tag incoming salary transfers as `Income` so they read as salary, not a
+ * generic deposit or transfer. Never overrides a manual choice. Idempotent.
+ */
+export function applySalaryCategory(): number {
+  const db = getDb();
+  const credits = allPrimary().filter((t) => t.sourceType === 'bank' && t.amount > 0);
+  const upd = db.prepare(
+    `UPDATE transactions SET category = 'Income', category_source = 'rule'
+     WHERE id = ? AND category_source != 'manual' AND (category IS NULL OR category != 'Income')`,
+  );
+  let changed = 0;
+  const tx = db.transaction(() => {
+    for (const t of credits) if (isSalary(t)) changed += upd.run(t.id).changes;
   });
   tx();
   return changed;

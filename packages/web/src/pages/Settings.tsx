@@ -259,6 +259,22 @@ export function Settings(): JSX.Element {
         </div>
       </Card>
 
+      {/* Salary payer names */}
+      <Card>
+        <h3 className="font-medium mb-1">Salary transfers</h3>
+        <p className="text-xs text-muted mb-3">
+          Incoming bank transfers whose name contains any of these are tagged as <b>Income</b> (salary). Comma-separated.
+        </p>
+        <SalaryForm
+          initial={(settings.salary?.payers ?? ['רותם', 'לירון']).join(', ')}
+          onSave={async (payers) => {
+            const r = await api.setSalaryPayers(payers);
+            await load();
+            setMsg(`Salary names saved · tagged ${r.tagged} transfer(s) as Income.`);
+          }}
+        />
+      </Card>
+
       {/* Dedup tuning */}
       <Card>
         <h3 className="font-medium mb-3">Duplicate matching</h3>
@@ -521,6 +537,36 @@ function EmailSettingsForm({ value, onSave }: { value: any; onSave: (v: any) => 
         }
       >
         Save search settings
+      </Button>
+    </div>
+  );
+}
+
+function SalaryForm({ initial, onSave }: { initial: string; onSave: (payers: string[]) => Promise<void> }): JSX.Element {
+  const [text, setText] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="flex flex-wrap gap-2 items-end">
+      <input
+        className="input flex-1 min-w-[200px]"
+        dir="auto"
+        placeholder="e.g. רותם, לירון"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <Button
+        variant="subtle"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          try {
+            await onSave(text.split(',').map((s) => s.trim()).filter(Boolean));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? 'Saving…' : 'Save'}
       </Button>
     </div>
   );
