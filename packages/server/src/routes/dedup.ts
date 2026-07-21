@@ -2,10 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   countExactDuplicates,
+  countSameMerchantAmount,
   listAlerts,
   mergeAlert,
   mergeExactDuplicates,
   mergeManual,
+  mergeSameMerchantAmount,
   resolveAlert,
   runDedup,
   unmerge,
@@ -36,12 +38,21 @@ export async function dedupRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/api/dedup/alerts', async (req) => {
     const q = z.object({ status: z.string().optional() }).parse(req.query);
-    return { alerts: listAlerts(q.status), exactCount: countExactDuplicates() };
+    return {
+      alerts: listAlerts(q.status),
+      exactCount: countExactDuplicates(),
+      sameMerchantCount: countSameMerchantAmount(),
+    };
   });
 
   // One-click merge of every exact (100%) duplicate alert.
   app.post('/api/dedup/merge-exact', async () => {
     return mergeExactDuplicates();
+  });
+
+  // Broader one-click merge: all same merchant + same amount alerts (any day).
+  app.post('/api/dedup/merge-similar', async () => {
+    return mergeSameMerchantAmount();
   });
 
   app.post('/api/dedup/alerts/:id/resolve', async (req) => {

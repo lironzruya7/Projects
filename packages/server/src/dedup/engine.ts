@@ -296,19 +296,26 @@ function isExactDuplicate(a: Transaction | null, b: Transaction | null, similari
   return sameRef || (sameDate && (sameMerchant || similarity >= 0.985));
 }
 
-/** How many open alerts are exact (100%) duplicates — for the merge button label. */
-export function countExactDuplicates(): number {
-  return listAlerts('open').filter((al) => isExactDuplicate(getTransaction(al.txn_a), getTransaction(al.txn_b), al.similarity))
-    .length;
+/**
+ * A pair that is the same charge seen more than once (same amount + currency +
+ * merchant), regardless of the exact day. Covers duplicate email notifications
+ * for one payment (e.g. PayPal on consecutive days). Broader than exact.
+ */
+function isSameMerchantAmount(a: Transaction | null, b: Transaction | null): boolean {
+  if (!a || !b || a.mergedInto || b.mergedInto) return false;
+  const sameAmount = Math.abs(Math.abs(a.amount) - Math.abs(b.amount)) < 0.005 && a.currency === b.currency;
+  const sameMerchant = Boolean(a.merchantNormalized) && a.merchantNormalized === b.merchantNormalized;
+  return sameAmount && sameMerchant;
 }
 
-/**
- * Merge every open alert that is an exact (100%) duplicate — same amount, same
- * currency, and same invoice number OR same day+merchant — into one ledger
- * entry, and resolve those alerts. Genuine double charges (different day, fuzzy
- * merchant) are left untouched. Grouped via union-find so triples collapse too.
- */
-export function mergeExactDuplicates(): { merged: number; groups: number } {
+type AlertPred = (a: Transaction | null, b: Transaction | null, similarity: number) => boolean;
+
+function countAlerts(pred: AlertPred): number {
+  return listAlerts('open').filter((al) => pred(getTransaction(al.txn_a), getTransaction(al.txn_b), al.similarity)).length;
+}
+
+/** Bulk-merge every open alert matching `pred` (union-find, so chains collapse). */
+function bulkMergeAlerts(pred: AlertPred): { merged: number; groups: number } {
   const open = listAlerts('open');
   const parent = new Map<string, string>();
   const find = (x: string): string => {
@@ -325,7 +332,7 @@ export function mergeExactDuplicates(): { merged: number; groups: number } {
 
   const resolvedAlerts: string[] = [];
   for (const al of open) {
-    if (isExactDuplicate(getTransaction(al.txn_a), getTransaction(al.txn_b), al.similarity)) {
+    if (pred(getTransaction(al.txn_a), getTransaction(al.txn_b), al.similarity)) {
       union(al.txn_a, al.txn_b);
       resolvedAlerts.push(al.id);
     }
@@ -349,4 +356,22 @@ export function mergeExactDuplicates(): { merged: number; groups: number } {
   }
   for (const id of resolvedAlerts) resolveAlert(id, 'dismissed');
   return { merged, groups: groupCount };
+}
+
+/** Counts for the two bulk-merge buttons. */
+export function countExactDuplicates(): number {
+  return countAlerts(isExactDuplicate);
+}
+export function countSameMerchantAmount(): number {
+  return countAlerts(isSameMerchantAmount);
+}
+
+/** Merge exact (100%, same day/invoice) duplicates. Safe default. */
+export function mergeExactDuplicates(): { merged: number; groups: number } {
+  return bulkMergeAlerts(isExactDuplicate);
+}
+
+/** Merge all same-merchant + same-amount alerts, regardless of the day (broader). */
+export function mergeSameMerchantAmount(): { merged: number; groups: number } {
+  return bulkMergeAlerts(isSameMerchantAmount);
 }
