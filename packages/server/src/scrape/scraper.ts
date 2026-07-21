@@ -51,14 +51,16 @@ export async function runScrape(providerKey: string, opts?: { months?: number })
   if (!credentials) throw new Error(`No saved credentials for ${spec.label}. Add them in Settings first.`);
 
   const startDate = monthsAgo(opts?.months ?? 3);
+  const proxyArgs = config.scrapeProxy ? [`--proxy-server=${config.scrapeProxy}`] : [];
   const scraper = createScraper({
     companyId: spec.companyId as never,
     startDate,
     combineInstallments: false,
     showBrowser: false,
-    defaultTimeout: 90_000,
+    timeout: config.scrapeTimeoutMs,
+    defaultTimeout: config.scrapeTimeoutMs,
     ...(config.puppeteerExecutablePath ? { executablePath: config.puppeteerExecutablePath } : {}),
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    args: [...proxyArgs, '--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
   } as never);
 
   const result = await scraper.scrape(credentials as never);

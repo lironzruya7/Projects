@@ -39,6 +39,10 @@ export const config = {
   // Optional Chromium path for the bank/card scraper. Leave empty to use the
   // browser puppeteer installs automatically.
   puppeteerExecutablePath: envStr('PUPPETEER_EXECUTABLE_PATH'),
+  // Scraper navigation timeout (ms) and an optional proxy for the scraper's
+  // browser (e.g. an Israeli proxy when the VPS IP is geo-blocked).
+  scrapeTimeoutMs: Number(envStr('SCRAPE_TIMEOUT_MS', '120000')),
+  scrapeProxy: envStr('SCRAPE_PROXY'),
   gmail: {
     clientId: envStr('GMAIL_CLIENT_ID'),
     clientSecret: envStr('GMAIL_CLIENT_SECRET'),
