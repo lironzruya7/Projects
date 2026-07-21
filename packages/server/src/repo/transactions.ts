@@ -17,6 +17,7 @@ interface TxnRow {
   category_source: string;
   source_type: string;
   source_provider: string | null;
+  account_label: string | null;
   source_ref: string | null;
   external_id: string | null;
   import_batch: string | null;
@@ -39,6 +40,7 @@ function rowToTransaction(r: TxnRow): Transaction {
     categorySource: (r.category_source as Transaction['categorySource']) ?? 'none',
     sourceType: r.source_type as SourceType,
     sourceProvider: r.source_provider,
+    accountLabel: r.account_label,
     sourceRef: r.source_ref,
     externalId: r.external_id,
     importBatch: r.import_batch,
@@ -58,11 +60,11 @@ export function insertParsed(parsed: ParsedTransaction[], importBatch: string): 
   const stmt = db.prepare(
     `INSERT INTO transactions
       (id, date, posted_at, amount, currency, merchant_raw, merchant_normalized,
-       description, category, category_source, source_type, source_provider,
+       description, category, category_source, source_type, source_provider, account_label,
        source_ref, external_id, import_batch, raw_amount, merged_into, created_at)
      VALUES
       (@id, @date, @posted_at, @amount, @currency, @merchant_raw, @merchant_normalized,
-       @description, @category, @category_source, @source_type, @source_provider,
+       @description, @category, @category_source, @source_type, @source_provider, @account_label,
        @source_ref, @external_id, @import_batch, @raw_amount, NULL, @created_at)`,
   );
   const ids: string[] = [];
@@ -84,6 +86,7 @@ export function insertParsed(parsed: ParsedTransaction[], importBatch: string): 
         category_source: cat ? 'rule' : 'none',
         source_type: p.sourceType,
         source_provider: p.sourceProvider ?? null,
+        account_label: p.accountLabel ?? null,
         source_ref: p.sourceRef ?? null,
         external_id: p.externalId ?? null,
         import_batch: importBatch,

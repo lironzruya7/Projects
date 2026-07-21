@@ -90,17 +90,28 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
   // (CSV/XLSX/PDF). Each is parsed without a mapping step where possible.
   app.post('/api/import/auto', async (req) => {
     const sourceType = (req.query as { sourceType?: string }).sourceType === 'bank' ? 'bank' : 'card';
-    const files = req.files();
     const results: Array<Record<string, unknown>> = [];
-    for await (const file of files) {
+    // Parts arrive in submit order. The client sends, per file, a `label` field
+    // immediately before its `file`, so we carry the latest label onto the next
+    // file (blank => the parser auto-detects a card last-4).
+    let pendingLabel: string | null = null;
+    for await (const part of req.parts()) {
+      if (part.type === 'field') {
+        if (part.fieldname === 'label') pendingLabel = String(part.value ?? '').trim() || null;
+        continue;
+      }
+      const file = part;
       const buf = await file.toBuffer();
+      const label = pendingLabel;
+      pendingLabel = null;
       try {
-        const r = await autoParseFile(buf, file.filename, sourceType);
+        const r = await autoParseFile(buf, file.filename, sourceType, label);
         let imported = 0;
         if (r.parsed.length > 0) {
           const batchId = createBatch({
             sourceType,
             sourceProvider: r.provider,
+            accountLabel: r.accountLabel,
             filename: file.filename,
             note: `Auto import (${r.format})`,
           });
@@ -112,6 +123,7 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
           filename: file.filename,
           format: r.format,
           provider: r.provider,
+          accountLabel: r.accountLabel,
           imported,
           skipped: r.skipped,
           needsManual: r.needsManual,

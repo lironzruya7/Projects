@@ -1,12 +1,15 @@
 import { getMapping } from '../repo/mappings.js';
 import { applyMapping, buildPreview } from './fileImport.js';
 import { parsePdfStatement } from './pdfStatement.js';
+import { readGrid } from './tabular.js';
+import { stripDirectionalMarks } from './encoding.js';
 import type { ParsedTransaction } from '../models/types.js';
 
 export interface AutoParseResult {
   parsed: ParsedTransaction[];
   skipped: number;
   provider: string | null;
+  accountLabel: string | null;
   format: 'pdf' | 'csv' | 'xlsx';
   needsManual: boolean;
   detail?: string;
@@ -15,6 +18,37 @@ export interface AutoParseResult {
 function isPdf(buf: Buffer, filename: string): boolean {
   if (filename.toLowerCase().endsWith('.pdf')) return true;
   return buf[0] === 0x25 && buf[1] === 0x50 && buf[2] === 0x44 && buf[3] === 0x46; // %PDF
+}
+
+/**
+ * Best-effort extraction of a card's last-4 from statement text (metadata rows
+ * that usually sit above the table). Anchored on a mask or the words
+ * "כרטיס"/"card"/"מסתיים"/"אחרונות" so we don't grab a random 4-digit amount.
+ */
+export function extractCardLast4(text: string): string | null {
+  const s = stripDirectionalMarks(text);
+  const patterns = [
+    /(?:\*{2,}|x{2,}|·{2,}|•{2,}|\.{3,}|\bxx)[\s-]*(\d{4})\b/i, // ****1234 / xxxx-1234
+    /(\d{4})[\s-]*(?:\*{2,}|x{2,})/i, // 1234****
+    /(?:כרטיס|card|מסתיים|אחרונות|ending)\D{0,25}?(\d{4})\b/i, // כרטיס ...1234
+  ];
+  for (const re of patterns) {
+    const m = s.match(re);
+    if (m) return m[1]!;
+  }
+  return null;
+}
+
+/** Scan a tabular file's top rows (above the data) for a card last-4. */
+function detectCardLabel(buf: Buffer, filename: string): string | null {
+  try {
+    if (isPdf(buf, filename)) return null;
+    const grid = readGrid(buf, filename);
+    const text = grid.rows.slice(0, 10).map((r) => r.join(' ')).join('\n');
+    return extractCardLast4(text);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -27,13 +61,20 @@ export async function autoParseFile(
   buf: Buffer,
   filename: string,
   sourceType: 'bank' | 'card',
+  accountLabel?: string | null,
 ): Promise<AutoParseResult> {
+  // Prefer the user-supplied label; otherwise try to detect a card last-4.
+  const label = (accountLabel ?? '').trim() || detectCardLabel(buf, filename);
+  const stamp = (rows: ParsedTransaction[]): ParsedTransaction[] =>
+    label ? rows.map((p) => ({ ...p, accountLabel: p.accountLabel ?? label })) : rows;
+
   if (isPdf(buf, filename)) {
     const r = await parsePdfStatement(buf, filename, { sourceType });
     return {
-      parsed: r.parsed,
+      parsed: stamp(r.parsed),
       skipped: r.skipped,
       provider: null,
+      accountLabel: label,
       format: 'pdf',
       needsManual: r.parsed.length === 0,
       detail: r.parsed.length === 0 ? `No transaction rows found in ${r.lines} lines` : undefined,
@@ -69,9 +110,10 @@ export async function autoParseFile(
 
   const result = applyMapping(buf, filename, cfg);
   return {
-    parsed: result.parsed,
+    parsed: stamp(result.parsed),
     skipped: result.skipped.length,
     provider: provider ?? null,
+    accountLabel: label,
     format: preview.format,
     needsManual: result.parsed.length === 0,
     detail: result.parsed.length === 0 ? 'Could not auto-detect columns — use single-file import to map them' : undefined,

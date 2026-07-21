@@ -7,14 +7,22 @@ import { accountColor, accountLabel } from '../lib/accounts';
 import { Badge, Bidi, Button } from './ui';
 
 /** Small colored chip naming the account/card a source came from. */
-function AccountChip({ provider, sourceType }: { provider: string | null; sourceType: string }): JSX.Element {
-  const color = accountColor(provider, sourceType);
+function AccountChip({
+  provider,
+  sourceType,
+  label,
+}: {
+  provider: string | null;
+  sourceType: string;
+  label?: string | null;
+}): JSX.Element {
+  const color = accountColor(provider, sourceType, label);
   return (
     <span
       className="text-[10px] px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap"
       style={{ background: `${color}22`, color }}
     >
-      {accountLabel(provider, sourceType)}
+      {accountLabel(provider, sourceType, label)}
     </span>
   );
 }
@@ -90,7 +98,12 @@ export function TransactionTable({
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="text-muted text-xs">{formatDate(e.date)}</span>
                   {distinctAccounts(e).map((a) => (
-                    <AccountChip key={`${a.provider}|${a.sourceType}`} provider={a.provider} sourceType={a.sourceType} />
+                    <AccountChip
+                      key={`${a.provider}|${a.label}|${a.sourceType}`}
+                      provider={a.provider}
+                      sourceType={a.sourceType}
+                      label={a.label}
+                    />
                   ))}
                   {editing === e.id ? (
                     <CategoryPicker
@@ -127,7 +140,7 @@ export function TransactionTable({
                 {e.sources.map((s) => (
                   <div key={s.id} className="flex items-center justify-between gap-2 text-xs">
                     <div className="flex items-center gap-2 min-w-0">
-                      <AccountChip provider={s.sourceProvider} sourceType={s.sourceType} />
+                      <AccountChip provider={s.sourceProvider} sourceType={s.sourceType} label={s.accountLabel} />
                       <Bidi className="truncate">{s.merchantRaw}</Bidi>
                       <span className="text-muted whitespace-nowrap">{formatDate(s.date)}</span>
                       {attachmentUrl(s) && (
@@ -260,12 +273,15 @@ function ReceiptsPanel({ txnId }: { txnId: string }): JSX.Element {
   );
 }
 
-/** Distinct accounts across a ledger entry's sources (provider + type). */
-function distinctAccounts(e: LedgerEntry): Array<{ provider: string | null; sourceType: string }> {
-  const seen = new Map<string, { provider: string | null; sourceType: string }>();
+/** Distinct accounts across a ledger entry's sources (provider + card tag + type). */
+function distinctAccounts(
+  e: LedgerEntry,
+): Array<{ provider: string | null; sourceType: string; label: string | null }> {
+  const seen = new Map<string, { provider: string | null; sourceType: string; label: string | null }>();
   for (const s of e.sources) {
-    const key = `${s.sourceProvider ?? ''}|${s.sourceType}`;
-    if (!seen.has(key)) seen.set(key, { provider: s.sourceProvider, sourceType: s.sourceType });
+    const key = `${s.sourceProvider ?? ''}|${s.accountLabel ?? ''}|${s.sourceType}`;
+    if (!seen.has(key))
+      seen.set(key, { provider: s.sourceProvider, sourceType: s.sourceType, label: s.accountLabel });
   }
   return [...seen.values()];
 }

@@ -13,6 +13,7 @@ export interface Transaction {
   categorySource: 'rule' | 'manual' | 'llm' | 'none';
   sourceType: SourceType;
   sourceProvider: string | null;
+  accountLabel: string | null;
   sourceRef: string | null;
   externalId: string | null;
   importBatch: string | null;
@@ -83,7 +84,7 @@ export interface DashboardSummary {
   spendOverTime: Array<{ month: string; expense: number; income: number }>;
   topMerchants: Array<{ merchant: string; amount: number; count: number }>;
   cashFlow: Array<{ month: string; income: number; expense: number; net: number }>;
-  byAccount: Array<{ provider: string | null; sourceType: string; amount: number; count: number }>;
+  byAccount: Array<{ provider: string | null; accountLabel: string | null; sourceType: string; amount: number; count: number }>;
   byCurrency: Array<{ currency: string; expense: number; income: number; count: number }>;
   activeCurrency: string;
   counts: { ledger: number; alerts: number };
@@ -190,9 +191,19 @@ export const api = {
       '/api/import/commit',
       { method: 'POST', body: JSON.stringify(body) },
     ),
-  autoImport: async (files: FileList | File[], sourceType: 'card' | 'bank') => {
+  autoImport: async (
+    files: Array<{ file: File; label?: string }> | FileList | File[],
+    sourceType: 'card' | 'bank',
+  ) => {
     const fd = new FormData();
-    for (const f of Array.from(files)) fd.append('file', f);
+    const items = Array.from(files as ArrayLike<unknown>).map((f) =>
+      f instanceof File ? { file: f, label: '' } : (f as { file: File; label?: string }),
+    );
+    // Send each label field immediately before its file so the server can pair them.
+    for (const { file, label } of items) {
+      fd.append('label', label ?? '');
+      fd.append('file', file);
+    }
     const res = await fetch(`/api/import/auto?sourceType=${sourceType}`, { method: 'POST', body: fd });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Import failed');
     return res.json() as Promise<{
@@ -200,6 +211,7 @@ export const api = {
         filename: string;
         format?: string;
         provider?: string | null;
+        accountLabel?: string | null;
         imported?: number;
         skipped?: number;
         needsManual?: boolean;

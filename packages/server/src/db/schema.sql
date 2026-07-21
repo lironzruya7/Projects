@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS import_batches (
   id            TEXT PRIMARY KEY,
   source_type   TEXT NOT NULL,            -- 'email' | 'bank' | 'card'
   source_provider TEXT,                   -- 'yahav' | 'isracard' | 'cal' | 'gmail' | ...
+  account_label TEXT,                     -- card/account tag, e.g. last-4 "1234" (distinguishes 2 cards of same provider)
   filename      TEXT,
   signature     TEXT,                     -- header fingerprint for files
   row_count     INTEGER NOT NULL DEFAULT 0,
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   category_source   TEXT NOT NULL DEFAULT 'none', -- 'rule' | 'manual' | 'llm' | 'none'
   source_type       TEXT NOT NULL,        -- 'email' | 'bank' | 'card'
   source_provider   TEXT,
+  account_label     TEXT,                 -- card/account tag, e.g. last-4 "1234"
   source_ref        TEXT,                 -- email id / attachment name / "file.csv#row"
   external_id       TEXT,                 -- invoice / order number
   import_batch      TEXT REFERENCES import_batches(id) ON DELETE CASCADE,

@@ -34,16 +34,33 @@ function hash(s: string): number {
 }
 const FALLBACK = ['#38bdf8', '#34d399', '#fbbf24', '#f472b6', '#a78bfa', '#22d3ee', '#f59e0b'];
 
-/** Human label for an account, e.g. "Isracard" or (no provider) "Bank". */
-export function accountLabel(provider: string | null | undefined, sourceType: string): string {
-  if (provider) return LABELS[provider.toLowerCase()] ?? provider;
-  return SOURCE_LABEL[sourceType] ?? sourceType;
+/**
+ * Human label for an account, e.g. "Isracard" or "Isracard ••1234" when a
+ * card tag distinguishes two cards of the same provider.
+ */
+export function accountLabel(
+  provider: string | null | undefined,
+  sourceType: string,
+  cardLabel?: string | null,
+): string {
+  const base = provider ? LABELS[provider.toLowerCase()] ?? provider : SOURCE_LABEL[sourceType] ?? sourceType;
+  const tag = (cardLabel ?? '').trim();
+  if (!tag) return base;
+  // If the tag is a bare 4-digit last-4, mask it; otherwise show the nickname as-is.
+  return /^\d{4}$/.test(tag) ? `${base} ••${tag}` : `${base} · ${tag}`;
 }
 
-/** Stable color for an account. */
-export function accountColor(provider: string | null | undefined, sourceType: string): string {
+/** Stable color for an account. Two cards of the same provider get distinct colors. */
+export function accountColor(
+  provider: string | null | undefined,
+  sourceType: string,
+  cardLabel?: string | null,
+): string {
+  const tag = (cardLabel ?? '').trim();
   if (provider) {
     const key = provider.toLowerCase();
+    // With a card tag, derive a distinct stable color so two cards don't collide.
+    if (tag) return FALLBACK[hash(key + '|' + tag) % FALLBACK.length]!;
     return COLORS[key] ?? FALLBACK[hash(key) % FALLBACK.length]!;
   }
   return SOURCE_COLOR[sourceType] ?? '#94a3b8';

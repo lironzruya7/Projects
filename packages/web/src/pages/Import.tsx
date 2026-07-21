@@ -35,6 +35,7 @@ export function ImportPage(): JSX.Element {
   const bankFilesRef = useRef<HTMLInputElement>(null);
   const [autoBusy, setAutoBusy] = useState(false);
   const [autoResults, setAutoResults] = useState<Awaited<ReturnType<typeof api.autoImport>> | null>(null);
+  const [cardStaged, setCardStaged] = useState<Array<{ file: File; label: string }> | null>(null);
 
   // Mapping form state
   const [mapping, setMapping] = useState<ColumnMapping>({});
@@ -121,6 +122,32 @@ export function ImportPage(): JSX.Element {
     }
   }
 
+  // Credit-card files are staged first so each can be tagged with its card
+  // (blank => the server auto-detects a last-4), then imported together.
+  function stageCardFiles(files: FileList | null): void {
+    if (!files || files.length === 0) return;
+    setCardStaged(Array.from(files).map((f) => ({ file: f, label: '' })));
+    setAutoResults(null);
+    setError(null);
+  }
+
+  async function runCardImport(): Promise<void> {
+    if (!cardStaged || cardStaged.length === 0) return;
+    setAutoBusy(true);
+    setAutoResults(null);
+    setError(null);
+    try {
+      const res = await api.autoImport(cardStaged, 'card');
+      setAutoResults(res);
+      setCardStaged(null);
+      await loadBatches();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setAutoBusy(false);
+    }
+  }
+
   async function scanReceipt(file: File | undefined): Promise<void> {
     if (!file) return;
     setScanBusy(true);
@@ -155,7 +182,7 @@ export function ImportPage(): JSX.Element {
 
       {/* Two quick multi-file modes */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <input ref={cardFilesRef} type="file" multiple accept=".csv,.xlsx,.xls,.xlsm,.pdf" className="hidden" onChange={(e) => autoImport(e.target.files, 'card')} />
+        <input ref={cardFilesRef} type="file" multiple accept=".csv,.xlsx,.xls,.xlsm,.pdf" className="hidden" onChange={(e) => stageCardFiles(e.target.files)} />
         <input ref={bankFilesRef} type="file" multiple accept=".csv,.xlsx,.xls,.xlsm,.pdf" className="hidden" onChange={(e) => autoImport(e.target.files, 'bank')} />
         <button
           disabled={autoBusy}
@@ -179,6 +206,40 @@ export function ImportPage(): JSX.Element {
         </button>
       </div>
 
+      {/* Stage credit-card files: tag each with its card before importing */}
+      {cardStaged && (
+        <Card style={{ background: 'linear-gradient(135deg, #c084fc14, transparent 60%)' }}>
+          <div className="font-medium mb-1">💳 Tag each card ({cardStaged.length} file{cardStaged.length > 1 ? 's' : ''})</div>
+          <p className="text-xs text-muted mb-3">
+            So two cards of the same company don't get mixed up. Leave blank to auto-detect the last 4 digits from the file.
+          </p>
+          <div className="space-y-2">
+            {cardStaged.map((s, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Bidi className="truncate flex-1 text-sm">{s.file.name}</Bidi>
+                <input
+                  className="input w-36 shrink-0"
+                  inputMode="numeric"
+                  placeholder="card # / nickname"
+                  value={s.label}
+                  onChange={(e) =>
+                    setCardStaged((prev) => prev!.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))
+                  }
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 mt-3">
+            <Button onClick={runCardImport} disabled={autoBusy}>
+              Import {cardStaged.length} file{cardStaged.length > 1 ? 's' : ''}
+            </Button>
+            <Button variant="ghost" onClick={() => setCardStaged(null)} disabled={autoBusy}>
+              Cancel
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {autoBusy && <Card><Spinner label="Reading files…" /></Card>}
 
       {autoResults && (
@@ -193,6 +254,7 @@ export function ImportPage(): JSX.Element {
                 <div className="flex items-center gap-2 min-w-0">
                   <Badge tone={r.format === 'pdf' ? 'warn' : 'default'}>{r.format ?? 'file'}</Badge>
                   <Bidi className="truncate">{r.filename}</Bidi>
+                  {r.provider && <Badge tone="card">{r.provider}{r.accountLabel ? ` ••${r.accountLabel}` : ''}</Badge>}
                 </div>
                 <div className="text-xs whitespace-nowrap">
                   {r.error ? (
@@ -443,6 +505,11 @@ export function ImportPage(): JSX.Element {
                   <Badge tone={b.source_type === 'bank' ? 'bank' : b.source_type === 'card' ? 'card' : 'email'}>
                     {b.source_type}
                   </Badge>
+                  {(b.source_provider || b.account_label) && (
+                    <Badge tone="card">
+                      {b.source_provider ?? ''}{b.account_label ? ` ••${b.account_label}` : ''}
+                    </Badge>
+                  )}
                   <span>{b.filename ?? b.note}</span>
                   <span className="text-muted text-xs">{b.row_count} rows · {formatDate((b.created_at ?? '').slice(0, 10))}</span>
                 </div>

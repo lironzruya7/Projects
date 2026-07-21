@@ -59,7 +59,7 @@ export interface DashboardSummary {
   spendOverTime: Array<{ month: string; expense: number; income: number }>;
   topMerchants: Array<{ merchant: string; amount: number; count: number }>;
   cashFlow: Array<{ month: string; income: number; expense: number; net: number }>;
-  byAccount: Array<{ provider: string | null; sourceType: string; amount: number; count: number }>;
+  byAccount: Array<{ provider: string | null; accountLabel: string | null; sourceType: string; amount: number; count: number }>;
   byCurrency: Array<{ currency: string; expense: number; income: number; count: number }>;
   activeCurrency: string;
   counts: { ledger: number; alerts: number };
@@ -161,10 +161,10 @@ export function buildDashboard(filter: DashboardFilter = {}): DashboardSummary {
     .slice(0, 10);
 
   // Spend by account/card for the reference month.
-  const acctMap = new Map<string, { provider: string | null; sourceType: string; amount: number; count: number }>();
+  const acctMap = new Map<string, { provider: string | null; accountLabel: string | null; sourceType: string; amount: number; count: number }>();
   for (const t of expenses.filter((t) => monthKey(t.date) === ref)) {
-    const key = `${t.sourceProvider ?? ''}|${t.sourceType}`;
-    const e = acctMap.get(key) ?? { provider: t.sourceProvider ?? null, sourceType: t.sourceType, amount: 0, count: 0 };
+    const key = `${t.sourceProvider ?? ''}|${t.accountLabel ?? ''}|${t.sourceType}`;
+    const e = acctMap.get(key) ?? { provider: t.sourceProvider ?? null, accountLabel: t.accountLabel ?? null, sourceType: t.sourceType, amount: 0, count: 0 };
     e.amount += mag(t);
     e.count++;
     acctMap.set(key, e);

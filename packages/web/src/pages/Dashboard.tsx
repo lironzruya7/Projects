@@ -213,11 +213,11 @@ export function Dashboard(): JSX.Element {
           <div className="space-y-2.5">
             {data.byAccount.map((a) => {
               const max = data.byAccount[0]!.amount || 1;
-              const color = accountColor(a.provider, a.sourceType);
-              const label = accountLabel(a.provider, a.sourceType);
+              const color = accountColor(a.provider, a.sourceType, a.accountLabel);
+              const label = accountLabel(a.provider, a.sourceType, a.accountLabel);
               return (
                 <button
-                  key={`${a.provider}|${a.sourceType}`}
+                  key={`${a.provider}|${a.accountLabel}|${a.sourceType}`}
                   className="w-full text-left active:scale-[0.99] transition-transform"
                   onClick={() =>
                     nav(a.provider ? `/transactions?provider=${encodeURIComponent(a.provider)}` : `/transactions?sourceType=${a.sourceType}`)

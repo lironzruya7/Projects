@@ -16,9 +16,25 @@ export function getDb(): Database.Database {
   db.pragma('foreign_keys = ON');
   const schema = readFileSync(resolve(here, 'schema.sql'), 'utf8');
   db.exec(schema);
+  migrate(db);
   _db = db;
   seed(db);
   return db;
+}
+
+/**
+ * Additive migrations for existing databases. `CREATE TABLE IF NOT EXISTS` never
+ * adds new columns to a table that already exists, so add them here idempotently.
+ */
+function migrate(db: Database.Database): void {
+  const addColumn = (table: string, column: string, type: string): void => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === column)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    }
+  };
+  addColumn('transactions', 'account_label', 'TEXT');
+  addColumn('import_batches', 'account_label', 'TEXT');
 }
 
 export function nowIso(): string {

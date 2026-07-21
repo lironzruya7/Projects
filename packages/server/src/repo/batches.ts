@@ -5,6 +5,7 @@ export interface ImportBatch {
   id: string;
   source_type: string;
   source_provider: string | null;
+  account_label: string | null;
   filename: string | null;
   signature: string | null;
   row_count: number;
@@ -15,6 +16,7 @@ export interface ImportBatch {
 export function createBatch(input: {
   sourceType: string;
   sourceProvider?: string | null;
+  accountLabel?: string | null;
   filename?: string | null;
   signature?: string | null;
   note?: string | null;
@@ -22,13 +24,14 @@ export function createBatch(input: {
   const id = randomUUID();
   getDb()
     .prepare(
-      `INSERT INTO import_batches (id, source_type, source_provider, filename, signature, row_count, note, created_at)
-       VALUES (@id, @source_type, @source_provider, @filename, @signature, 0, @note, @created_at)`,
+      `INSERT INTO import_batches (id, source_type, source_provider, account_label, filename, signature, row_count, note, created_at)
+       VALUES (@id, @source_type, @source_provider, @account_label, @filename, @signature, 0, @note, @created_at)`,
     )
     .run({
       id,
       source_type: input.sourceType,
       source_provider: input.sourceProvider ?? null,
+      account_label: input.accountLabel ?? null,
       filename: input.filename ?? null,
       signature: input.signature ?? null,
       note: input.note ?? null,
