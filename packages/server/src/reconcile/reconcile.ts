@@ -295,6 +295,10 @@ export function buildReconciliation(opts?: { tolPct?: number; tolMinor?: number;
   const consumed = new Set<string>();
   const tolFor = (target: number): number => Math.max((target * tolPct) / 100, tolMinor / 100);
 
+  // Cards whose statement was matched for a given month — so a still-missing line
+  // that month points only at the card(s) not yet accounted for.
+  const consumedCardsByMonth = new Map<string, Set<string>>();
+
   const matches: ReconMatch[] = [];
   for (const s of settlements) {
     const target = Math.abs(s.amount);
@@ -319,7 +323,12 @@ export function buildReconciliation(opts?: { tolPct?: number; tolMinor?: number;
 
     const settlement = { id: s.id, date: s.date, amount: s.amount, provider: guess, merchant: s.merchantRaw || s.description };
     if (hit) {
-      for (const st of hit.picks) consumed.add(st.batchId);
+      const month = s.date.slice(0, 7);
+      if (!consumedCardsByMonth.has(month)) consumedCardsByMonth.set(month, new Set());
+      for (const st of hit.picks) {
+        consumed.add(st.batchId);
+        if (st.accountLabel) consumedCardsByMonth.get(month)!.add(st.accountLabel);
+      }
       const items = hit.picks.flatMap((st) => batchItems(st.batchId)).sort((a, b) => a.date.localeCompare(b.date));
       const labels = hit.picks.map((p) => p.accountLabel).filter(Boolean);
       matches.push({
@@ -369,15 +378,19 @@ export function buildReconciliation(opts?: { tolPct?: number; tolMinor?: number;
     .filter((m) => m.status === 'unmatched')
     .map((m) => {
       const family = (m.settlement.provider ? cardFamily(m.settlement.provider) : 'cal') as 'isracard' | 'cal';
+      const month = m.settlement.date.slice(0, 7);
+      const accountedFor = consumedCardsByMonth.get(month) ?? new Set<string>();
+      // Only cards of this family that don't already have a matched statement this month.
+      const cards = [...(familyCards.get(family) ?? [])].filter((c) => !accountedFor.has(c)).sort();
       return {
         date: m.settlement.date,
-        month: m.settlement.date.slice(0, 7),
+        month,
         family,
         provider: m.settlement.provider,
         amount: Math.abs(m.settlement.amount),
         likelyFee: Math.abs(m.settlement.amount) < FEE_MAX,
         nearest: m.nearest ? { accountLabel: m.nearest.accountLabel, diff: m.nearest.diff } : null,
-        cards: [...(familyCards.get(family) ?? [])].sort(),
+        cards,
       };
     })
     .sort((a, b) => b.amount - a.amount);
