@@ -41,6 +41,13 @@ rule_args() { echo -d "$1" -j DROP -m comment --comment "$MARK"; }
 # otherwise blocking RFC1918 also blocks a private resolver / the docker0
 # gateway that forwards DNS. Allow port 53 to RETURN *above* the DROP rules.
 dns_args() { echo -p "$1" --dport 53 -j RETURN -m comment --comment "$MARK-dns"; }
+# CRITICAL: a container's own IP is in docker's 172.17.x range (inside the
+# 172.16/12 DROP). Return packets of an ALLOWED outbound connection are
+# addressed to that container IP, so without this they'd be dropped and even
+# public-internet connections would never complete. Allow established/related
+# return traffic ABOVE all DROPs; NEW outbound to private ranges still falls
+# through to the DROP rules.
+est_args() { echo -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN -m comment --comment "$MARK-est"; }
 
 ensure_chain() {
   local ipt="$1"
@@ -69,12 +76,19 @@ install_rules() {
       "$ipt" -I "$CHAIN" $(dns_args "$proto"); echo "  [$ipt] ALLOW dns/$proto (RETURN, above DROPs)"
     fi
   done
+  # Inserted last -> ends up at the very TOP of the chain (above DNS + DROPs).
+  if ! "$ipt" -C "$CHAIN" $(est_args) 2>/dev/null; then
+    "$ipt" -I "$CHAIN" $(est_args); echo "  [$ipt] ALLOW established/related (RETURN, top)"
+  fi
 }
 
 remove_rules() {
   local ipt="$1"; shift
   local nets=("$@")
   ensure_chain "$ipt" || return 0
+  while "$ipt" -C "$CHAIN" $(est_args) 2>/dev/null; do
+    "$ipt" -D "$CHAIN" $(est_args); echo "  [$ipt] removed established/related"
+  done
   for proto in udp tcp; do
     while "$ipt" -C "$CHAIN" $(dns_args "$proto") 2>/dev/null; do
       "$ipt" -D "$CHAIN" $(dns_args "$proto"); echo "  [$ipt] removed dns/$proto"
