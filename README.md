@@ -135,6 +135,18 @@ Service-level:
 - `deploy/cyber-exec.service` adds `NoNewPrivileges`, `ProtectSystem=strict`,
   `PrivateTmp`, etc. for the service process itself.
 
+## Workdir root & `files`
+
+Each request writes its `files[]` into a throwaway workdir that is bind-mounted
+to `/work` inside the container. That workdir lives under **`CYBER_EXEC_WORKROOT`**
+(systemd: `/var/lib/cyber-exec/work`; `run.sh`: `<repo>/.work`).
+
+It must be a **real host path the Docker daemon can see** — do **not** place it
+under a systemd `PrivateTmp` `/tmp`. The daemon resolves the bind-mount source
+in its own mount namespace, so a private `/tmp` would mount an *empty* `/work`
+and uploaded files would be missing. The shipped unit therefore uses
+`StateDirectory=cyber-exec` and no `PrivateTmp`.
+
 ## Test
 
 ```bash

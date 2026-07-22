@@ -44,6 +44,14 @@ CONTAINER_USER = os.environ.get("SEC_TOOLBOX_USER", "runner")
 OUTPUT_CAP_BYTES = 1 * 1024 * 1024  # ~1 MB per stream
 DOCKER_BIN = os.environ.get("DOCKER_BIN", "docker")
 
+# Root for per-request throwaway workdirs. This MUST be a path the Docker
+# daemon can see in ITS mount namespace, because the daemon resolves the
+# `-v <workdir>:/work` bind-mount source. In particular it must NOT live under
+# a systemd `PrivateTmp=true` /tmp — that /tmp is private to the service, so
+# the daemon (host namespace) would bind-mount an empty dir and /work would
+# appear empty. Default to a real host state dir; override for local dev.
+WORK_ROOT = os.environ.get("CYBER_EXEC_WORKROOT", "/var/lib/cyber-exec/work")
+
 # Resource limits applied to every container.
 PIDS_LIMIT = os.environ.get("SEC_TOOLBOX_PIDS", "512")
 MEMORY_LIMIT = os.environ.get("SEC_TOOLBOX_MEMORY", "2g")
@@ -60,6 +68,16 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(message)s",
 )
 log = logging.getLogger("cyber-exec")
+
+# Ensure the workdir root exists and is usable, failing fast (and clearly) if
+# it is misconfigured rather than silently producing empty /work mounts.
+try:
+    os.makedirs(WORK_ROOT, exist_ok=True)
+except OSError as exc:  # pragma: no cover - startup misconfig
+    raise RuntimeError(
+        f"cannot create CYBER_EXEC_WORKROOT={WORK_ROOT!r}: {exc}. "
+        "Point it at a host-visible, writable directory."
+    ) from exc
 
 # --------------------------------------------------------------------------- #
 # Request / response models
@@ -151,9 +169,11 @@ def _decode_to_str(sink: list, cap: int) -> str:
 
 
 def run_command(req: ExecRequest) -> ExecResponse:
-    workdir = tempfile.mkdtemp(prefix="cyber-exec-")
-    # The non-root container user needs to read inputs and write outputs into
-    # the mounted workdir; make the throwaway dir world-writable.
+    # Create the throwaway workdir under WORK_ROOT (host-visible), NOT the
+    # process /tmp — see the WORK_ROOT note above.
+    workdir = tempfile.mkdtemp(prefix="cyber-exec-", dir=WORK_ROOT)
+    # The non-root container user (uid 1000) must be able to traverse the
+    # workdir and read the inputs; make the throwaway dir world-usable.
     os.chmod(workdir, 0o777)
 
     container_name = f"cyberexec-{os.path.basename(workdir)}"

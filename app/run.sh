@@ -19,5 +19,12 @@ if [[ -z "${CYBER_EXEC_TOKEN:-}" ]]; then
   exit 1
 fi
 
+# Host-visible work root for the throwaway container mounts. For local/direct
+# runs default to a repo-local dir (never the process /tmp, which may be a
+# systemd PrivateTmp namespace the Docker daemon cannot see). The systemd unit
+# sets its own CYBER_EXEC_WORKROOT.
+export CYBER_EXEC_WORKROOT="${CYBER_EXEC_WORKROOT:-$(cd .. && pwd)/.work}"
+mkdir -p "$CYBER_EXEC_WORKROOT"
+
 # IMPORTANT: bind 127.0.0.1 only. Never 0.0.0.0.
 exec uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1
