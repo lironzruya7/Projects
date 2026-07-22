@@ -79,16 +79,33 @@ function seed(db: Database.Database): void {
     email: {
       keywords: ['invoice', 'receipt', 'order', 'payment', 'חשבונית', 'קבלה', 'תשלום', 'הזמנה'],
       senderDomains: [],
-      maxResults: 50,
+      maxResults: 200,
       lookbackDays: 90,
     },
     anomaly: { newMerchantWindowDays: 60, spikeMultiplier: 2.5 },
   };
-  const getSetting = db.prepare(`SELECT value FROM settings WHERE key = ?`);
+  const getSettingStmt = db.prepare(`SELECT value FROM settings WHERE key = ?`);
   const putSetting = db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)`);
+  const updateSetting = db.prepare(
+    `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+  );
   const seedSettings = db.transaction(() => {
     for (const [key, val] of Object.entries(defaults)) {
-      if (!getSetting.get(key)) putSetting.run(key, JSON.stringify(val));
+      if (!getSettingStmt.get(key)) putSetting.run(key, JSON.stringify(val));
+    }
+    // One-time: raise the legacy email scan cap 50 -> 200 so 90-day scans aren't
+    // truncated to the newest 50 emails. Guarded so it runs only once.
+    if (!getSettingStmt.get('migr_email_max200')) {
+      const row = getSettingStmt.get('email') as { value: string } | undefined;
+      if (row) {
+        try {
+          const email = JSON.parse(row.value) as { maxResults?: number };
+          if (email.maxResults === 50) updateSetting.run('email', JSON.stringify({ ...email, maxResults: 200 }));
+        } catch {
+          /* ignore malformed */
+        }
+      }
+      putSetting.run('migr_email_max200', JSON.stringify(true));
     }
   });
   seedSettings();

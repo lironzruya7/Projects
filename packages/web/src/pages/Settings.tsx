@@ -519,7 +519,7 @@ function EmailSettingsForm({ value, onSave }: { value: any; onSave: (v: any) => 
   const [keywords, setKeywords] = useState<string>((value.keywords ?? []).join(', '));
   const [domains, setDomains] = useState<string>((value.senderDomains ?? []).join(', '));
   const [lookbackDays, setLookback] = useState<number>(value.lookbackDays ?? 90);
-  const [maxResults, setMax] = useState<number>(value.maxResults ?? 50);
+  const [maxResults, setMax] = useState<number>(value.maxResults ?? 200);
 
   return (
     <div className="space-y-2 border-t border-edge pt-3">

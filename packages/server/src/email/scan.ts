@@ -127,7 +127,7 @@ export async function runScan(opts?: { providerName?: EmailProviderName; maxResu
   const settings = getSetting<EmailSettings>('email', {
     keywords: ['invoice', 'receipt', 'order', 'payment', 'חשבונית', 'קבלה', 'תשלום', 'הזמנה'],
     senderDomains: [],
-    maxResults: 50,
+    maxResults: 200,
     lookbackDays: 90,
   });
   const provider = getProvider(opts?.providerName);
@@ -212,7 +212,7 @@ export async function testConnection(opts?: {
   const settings = getSetting<EmailSettings>('email', {
     keywords: ['invoice', 'receipt', 'order', 'payment', 'חשבונית', 'קבלה', 'תשלום', 'הזמנה'],
     senderDomains: [],
-    maxResults: 50,
+    maxResults: 200,
     lookbackDays: 90,
   });
   const provider = getProvider(opts?.providerName);
