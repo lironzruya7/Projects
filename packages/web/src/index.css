@@ -20,23 +20,24 @@
 :root {
   color-scheme: light;
 
-  /* Surfaces + text (light) */
-  --surface: 248 250 252; /* page background  (slate-50) */
-  --panel: 255 255 255; /* cards            (white)    */
-  --panel2: 241 245 249; /* insets/fills     (slate-100) */
-  --edge: 226 232 240; /* borders/dividers (slate-200) */
-  --ink: 15 23 42; /* primary text     (slate-900) */
+  /* Surfaces + text (light) — soft, low-glare: off-white cards on a muted gray
+     page instead of pure white on white. */
+  --surface: 235 239 244; /* page background  (soft cool gray) */
+  --panel: 251 252 254; /* cards            (near-white, not glaring) */
+  --panel2: 238 242 247; /* insets/fills */
+  --edge: 220 225 233; /* borders/dividers */
+  --ink: 30 41 59; /* primary text     (slate-800, softer than pure black) */
   --muted: 100 116 139; /* secondary text   (slate-500) */
   --brand: 2 132 199; /* accent           (sky-600)   */
   --brand-ink: 255 255 255; /* text/icon that sits on --brand */
 
   /* App background wash + scrollbar */
-  --app-bg: radial-gradient(1200px 600px at 100% -10%, #e0f2fe 0%, #f8fafc 55%);
+  --app-bg: radial-gradient(1200px 600px at 100% -10%, #e6ecf5 0%, #edf0f4 55%);
   --scrollbar: 203 213 225; /* slate-300 */
 
   /* Chart colors that must adapt to the surface */
   --chart-axis: #64748b; /* slate-500 tick labels */
-  --chart-grid: #e2e8f0; /* slate-200 gridlines   */
+  --chart-grid: #e1e6ec; /* soft gridlines */
 
   /* Semantic status tokens — one source of truth for money/status colors. */
   --income: #059669; /* money in  (emerald-600, readable on white) */
@@ -52,20 +53,21 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --surface: 15 23 42; /* slate-900 */
-  --panel: 30 41 59; /* slate-800 */
-  --panel2: 36 52 73;
-  --edge: 51 65 85; /* slate-700 */
+  /* Dark — lifted off pure black: a lighter slate so it reads as dark, not void. */
+  --surface: 23 31 49; /* page background (lighter than slate-900) */
+  --panel: 34 45 66; /* cards */
+  --panel2: 44 57 80;
+  --edge: 58 74 97;
   --ink: 226 232 240; /* slate-200 */
   --muted: 148 163 184; /* slate-400 */
   --brand: 56 189 248; /* sky-400 */
   --brand-ink: 15 23 42; /* dark text on the light-ish accent */
 
-  --app-bg: radial-gradient(1200px 600px at 100% -10%, #172033 0%, #0f172a 55%);
-  --scrollbar: 51 65 85;
+  --app-bg: radial-gradient(1200px 600px at 100% -10%, #202d49 0%, #171f33 55%);
+  --scrollbar: 58 74 97;
 
-  --chart-axis: #64748b;
-  --chart-grid: #1e293b;
+  --chart-axis: #7c8ba3;
+  --chart-grid: #2b384e;
 
   --income: #34d399;
   --expense: #fb7185;
