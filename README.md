@@ -32,6 +32,7 @@ tailnet client ──HTTPS──▶ tailscale serve :443 ──▶ 127.0.0.1:800
 | `deploy/egress-firewall.service` | Boot unit that re-applies the egress firewall |
 | `scripts/smoke_test.sh` | End-to-end smoke test (base) |
 | `scripts/smoke_heavy.sh` | Smoke test for the heavy image |
+| `scripts/verify_egress.sh` | Post-change regression check (egress firewall + isolation) |
 | `.env.example` | Token + optional overrides |
 
 ## Setup
