@@ -35,6 +35,7 @@ export function ImportPage(): JSX.Element {
   const [scanMsg, setScanMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const cardFilesRef = useRef<HTMLInputElement>(null);
   const bankFilesRef = useRef<HTMLInputElement>(null);
+  const paypalFilesRef = useRef<HTMLInputElement>(null);
   const [autoBusy, setAutoBusy] = useState(false);
   const [autoResults, setAutoResults] = useState<Awaited<ReturnType<typeof api.autoImport>> | null>(null);
   const [cardStaged, setCardStaged] = useState<Array<{ file: File; label: string; provider: string }> | null>(null);
@@ -212,10 +213,11 @@ export function ImportPage(): JSX.Element {
         Formats are auto-detected; the column mapping is remembered per format.
       </p>
 
-      {/* Two quick multi-file modes */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      {/* Quick multi-file modes */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <input ref={cardFilesRef} type="file" multiple accept=".csv,.xlsx,.xls,.xlsm,.pdf" className="hidden" onChange={(e) => stageCardFiles(e.target.files)} />
         <input ref={bankFilesRef} type="file" multiple accept=".csv,.xlsx,.xls,.xlsm,.pdf" className="hidden" onChange={(e) => autoImport(e.target.files, 'bank')} />
+        <input ref={paypalFilesRef} type="file" multiple accept=".csv,.xlsx,.xls,.xlsm" className="hidden" onChange={(e) => autoImport(e.target.files, 'bank')} />
         <button
           disabled={autoBusy}
           onClick={() => cardFilesRef.current?.click()}
@@ -235,6 +237,16 @@ export function ImportPage(): JSX.Element {
           <div className="text-2xl">🏦</div>
           <div className="font-medium mt-1">Bank statement</div>
           <div className="text-xs text-muted mt-0.5">Backup / cross-check · CSV / Excel / PDF</div>
+        </button>
+        <button
+          disabled={autoBusy}
+          onClick={() => paypalFilesRef.current?.click()}
+          className="rounded-2xl border-2 border-dashed border-edge hover:border-brand p-5 text-center active:scale-[0.99] transition-all disabled:opacity-50"
+          style={{ background: 'linear-gradient(135deg, #0070ba18, transparent 60%)' }}
+        >
+          <div className="text-2xl">🅿️</div>
+          <div className="font-medium mt-1">PayPal</div>
+          <div className="text-xs text-muted mt-0.5">Activity export · CSV / Excel · signed amounts</div>
         </button>
       </div>
 

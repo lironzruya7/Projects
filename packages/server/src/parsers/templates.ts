@@ -7,11 +7,14 @@ import type { AmountMode, ColumnMapping } from '../models/types.js';
  */
 const KEYWORDS = {
   date: ['תאריך עסקה', 'תאריך רכישה', 'תאריך חיוב', 'תאריך ערך', 'תאריך', 'מועד', 'date', 'transaction date'],
-  // 'gross'/'net' cover PayPal's transaction CSV export.
-  amount: ['סכום חיוב', 'סכום העסקה', 'סכום עסקה', 'סכום בש"ח', 'סכום בשח', 'סכום', 'amount', 'gross', 'net', 'sum', 'charge'],
+  // 'ברוטו'/'נטו' (HE) and 'gross'/'net' (EN) cover PayPal's transaction CSV
+  // export. They are listed before the generic 'סכום' so the exact-match pass
+  // picks the real amount column instead of partial-matching "סכום משלוח וטיפול"
+  // (shipping & handling) in the Hebrew PayPal export.
+  amount: ['סכום חיוב', 'סכום העסקה', 'סכום עסקה', 'סכום בש"ח', 'סכום בשח', 'ברוטו', 'נטו', 'סכום', 'amount', 'gross', 'net', 'sum', 'charge'],
   debit: ['חובה', 'חיוב', 'debit'],
   credit: ['זכות', 'credit'],
-  merchant: ['שם בית העסק', 'שם בית עסק', 'בית העסק', 'בית עסק', 'שם העסק', 'merchant', 'business', 'payee', 'name', 'counterparty'],
+  merchant: ['שם בית העסק', 'שם בית עסק', 'בית העסק', 'בית עסק', 'שם העסק', 'שם', 'merchant', 'business', 'payee', 'name', 'counterparty'],
   description: ['תיאור פעולה', 'תיאור', 'פרטים', 'פירוט', 'פירוט נוסף', 'הערות', 'description', 'details', 'memo'],
   // The currency of the *charged* amount ("סכום חיוב"). This is what we import.
   chargeCurrency: ['מטבע חיוב', 'מטבע לחיוב', 'charge currency'],
@@ -21,7 +24,7 @@ const KEYWORDS = {
   currency: ['מטבע עסקה', 'מטבע', 'currency'],
   type: ['סוג עסקה', 'סוג', 'type'],
   balance: ['יתרה', 'balance'],
-  reference: ['מספר זיהוי עיסקה', 'מספר זיהוי עסקה', 'מס שובר', 'שובר', 'אסמכתא', 'מספר עסקה', 'מס עסקה', 'transaction id', 'txn id', 'reference', 'ref'],
+  reference: ['מספר זיהוי עיסקה', 'מספר זיהוי עסקה', 'מזהה עסקה', 'מזהה', 'מס שובר', 'שובר', 'אסמכתא', 'מספר עסקה', 'מס עסקה', 'transaction id', 'txn id', 'reference', 'ref'],
 } as const;
 
 export interface ProviderTemplate {
@@ -34,6 +37,25 @@ export interface ProviderTemplate {
 }
 
 export const PROVIDER_TEMPLATES: ProviderTemplate[] = [
+  {
+    // PayPal activity export. Hebrew columns: תאריך / שם / ברוטו / עמלה / נטו /
+    // מזהה עסקה. Amounts are signed (negative = money out), so it is a "bank"
+    // source with a single signed amount — NOT a card (card mode would flip the
+    // sign and turn refunds into charges). Checked first so its distinctive
+    // ברוטו/נטו pair wins before the generic single-amount fallback.
+    key: 'paypal',
+    label: 'PayPal',
+    sourceType: 'bank',
+    fingerprint: ['ברוטו', 'נטו'],
+    amountMode: 'signed',
+  },
+  {
+    key: 'paypal_en',
+    label: 'PayPal',
+    sourceType: 'bank',
+    fingerprint: ['gross', 'net'],
+    amountMode: 'signed',
+  },
   {
     key: 'yahav',
     label: 'Bank Yahav (בנק יהב)',
