@@ -37,6 +37,10 @@ V6_BLOCK=(
 )
 
 rule_args() { echo -d "$1" -j DROP -m comment --comment "$MARK"; }
+# DNS must keep working (name resolution for egress AND for docker builds),
+# otherwise blocking RFC1918 also blocks a private resolver / the docker0
+# gateway that forwards DNS. Allow port 53 to RETURN *above* the DROP rules.
+dns_args() { echo -p "$1" --dport 53 -j RETURN -m comment --comment "$MARK-dns"; }
 
 ensure_chain() {
   local ipt="$1"
@@ -46,17 +50,23 @@ ensure_chain() {
   fi
 }
 
+# Insert the DROP rules (they land at the top of the chain, above docker's
+# trailing RETURN), then insert the DNS RETURN rules AFTER — so DNS ends up
+# ABOVE the DROPs and is evaluated first.
 install_rules() {
   local ipt="$1"; shift
   local nets=("$@")
   ensure_chain "$ipt" || return 0
   for net in "${nets[@]}"; do
-    # Idempotent: only insert if an identical rule isn't already present.
     if ! "$ipt" -C "$CHAIN" $(rule_args "$net") 2>/dev/null; then
-      "$ipt" -I "$CHAIN" $(rule_args "$net")
-      echo "  [$ipt] DROP -> $net"
+      "$ipt" -I "$CHAIN" $(rule_args "$net"); echo "  [$ipt] DROP -> $net"
     else
       echo "  [$ipt] already present -> $net"
+    fi
+  done
+  for proto in udp tcp; do
+    if ! "$ipt" -C "$CHAIN" $(dns_args "$proto") 2>/dev/null; then
+      "$ipt" -I "$CHAIN" $(dns_args "$proto"); echo "  [$ipt] ALLOW dns/$proto (RETURN, above DROPs)"
     fi
   done
 }
@@ -65,20 +75,24 @@ remove_rules() {
   local ipt="$1"; shift
   local nets=("$@")
   ensure_chain "$ipt" || return 0
+  for proto in udp tcp; do
+    while "$ipt" -C "$CHAIN" $(dns_args "$proto") 2>/dev/null; do
+      "$ipt" -D "$CHAIN" $(dns_args "$proto"); echo "  [$ipt] removed dns/$proto"
+    done
+  done
   for net in "${nets[@]}"; do
     while "$ipt" -C "$CHAIN" $(rule_args "$net") 2>/dev/null; do
-      "$ipt" -D "$CHAIN" $(rule_args "$net")
-      echo "  [$ipt] removed -> $net"
+      "$ipt" -D "$CHAIN" $(rule_args "$net"); echo "  [$ipt] removed -> $net"
     done
   done
 }
 
 case "${1:-install}" in
   install)
-    echo "Installing $MARK DROP rules into $CHAIN ..."
+    echo "Installing $MARK rules into $CHAIN (DNS allowed, private ranges dropped) ..."
     install_rules iptables "${V4_BLOCK[@]}"
     command -v ip6tables >/dev/null 2>&1 && install_rules ip6tables "${V6_BLOCK[@]}" || true
-    echo "Done. Egress containers can now reach only the public internet."
+    echo "Done. Egress containers can resolve DNS + reach the public internet only."
     ;;
   remove)
     echo "Removing $MARK rules ..."
