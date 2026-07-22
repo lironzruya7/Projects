@@ -164,15 +164,19 @@ Every container runs with:
 Egress isolation (important):
 
 - `network: "none"` (the default) = no network at all — fully isolated.
-- `network: "egress"` uses Docker **bridge**, which routes through the host and
-  can therefore reach the **tailnet** (`100.64.0.0/10`), the private **LAN**
-  (RFC1918) and cloud **metadata** (`169.254.169.254`), not just the public
-  internet. To restrict egress to internet-only, run
-  `sudo deploy/egress-firewall.sh install` on the host — it adds `DOCKER-USER`
-  DROP rules for those ranges (v4 + v6). Without it, an egress-mode command is a
-  potential pivot into your private network. To survive reboots and Docker
-  restarts (which flush `DOCKER-USER`), install `deploy/egress-firewall.service`
-  (`PartOf=docker.service`) instead of relying on `netfilter-persistent`.
+- `network: "egress"` runs the container on a **dedicated** docker network
+  (`cyberexec-egress`, `172.31.255.0/24`, created automatically at startup), not
+  the shared default bridge. That network still routes through the host, so
+  without filtering a container could reach the **tailnet** (`100.64.0.0/10`),
+  the private **LAN** (RFC1918) and cloud **metadata** (`169.254.169.254`).
+  `sudo deploy/egress-firewall.sh install` restricts it to the public internet
+  only, with rules scoped by that network's **source subnet** — so `docker
+  build` and any other containers are never affected. Tailnet DROP is in
+  `DOCKER-USER`; host-local MagicDNS is dropped in `raw/PREROUTING` (tailscale
+  DNATs it before FORWARD/INPUT). To survive reboots and Docker restarts (which
+  flush the rules), install `deploy/egress-firewall.service`
+  (`PartOf=docker.service`). The firewall's `EGRESS_SUBNET` must match the app's
+  `SEC_TOOLBOX_EGRESS_SUBNET`.
 
 Robustness:
 

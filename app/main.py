@@ -92,6 +92,14 @@ VOL_SYMBOL_CACHE = os.environ.get("SEC_TOOLBOX_VOL_CACHE", "")
 # Where vol3 looks for extra symbol tables inside the container.
 VOL_SYMBOL_MOUNT = "/opt/vol-symbols"
 
+# Dedicated, isolated docker network for egress containers. Running egress on
+# its OWN network (with a known subnet) lets the host firewall scope its rules
+# to ONLY cyber-exec egress containers (by source subnet) instead of the shared
+# default bridge — so `docker build` and any other containers are never touched.
+# The subnet here MUST match deploy/egress-firewall.sh's EGRESS_SUBNET.
+EGRESS_NETWORK = os.environ.get("SEC_TOOLBOX_EGRESS_NETWORK", "cyberexec-egress")
+EGRESS_SUBNET = os.environ.get("SEC_TOOLBOX_EGRESS_SUBNET", "172.31.255.0/24")
+
 # Upper sanity bound for any timeout before per-image capping (== max heavy cap).
 MAX_TIMEOUT_HARD = 1800
 
@@ -349,7 +357,7 @@ def run_command(req: ExecRequest) -> ExecResponse:
             pass
 
         # 3) Assemble the hardened `docker run` invocation.
-        network = "none" if req.network == "none" else "bridge"
+        network = "none" if req.network == "none" else EGRESS_NETWORK
 
         # Raw sockets: only when explicitly requested AND egress is on. Under
         # --network none there is nothing to send raw packets over, so raw is
@@ -492,6 +500,28 @@ def _cleanup_workdir(workdir: str) -> None:
         log.error("workdir LEAK: could not remove %s", workdir)
 
 
+def _ensure_egress_network() -> None:
+    """Create the dedicated isolated egress network if missing, so the host
+    firewall can scope its rules to this network's subnet only. Not `--internal`
+    (egress needs internet); the firewall — not docker — restricts it to the
+    public internet. Best-effort at startup."""
+    try:
+        res = subprocess.run(
+            [DOCKER_BIN, "network", "inspect", EGRESS_NETWORK],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=20, check=False,
+        )
+        if res.returncode == 0:
+            return
+        subprocess.run(
+            [DOCKER_BIN, "network", "create", "--driver", "bridge",
+             "--subnet", EGRESS_SUBNET, EGRESS_NETWORK],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30, check=False,
+        )
+        log.info("ensured egress network %s (%s)", EGRESS_NETWORK, EGRESS_SUBNET)
+    except Exception as exc:  # pragma: no cover - best effort
+        log.warning("could not ensure egress network %s: %s", EGRESS_NETWORK, exc)
+
+
 def _startup_sweep() -> None:
     """Remove stale throwaway workdirs and dangling `cyberexec-*` containers on
     startup. The per-request finally teardown does not run on SIGKILL/OOM/power
@@ -528,7 +558,9 @@ def _startup_sweep() -> None:
 
 app = FastAPI(title="cyber-exec", version="1.0.0")
 
-# Sweep any workdirs/containers orphaned by a previous hard-killed run (F3).
+# Ensure the dedicated egress network exists, then sweep any workdirs/containers
+# orphaned by a previous hard-killed run (F3).
+_ensure_egress_network()
 _startup_sweep()
 
 
