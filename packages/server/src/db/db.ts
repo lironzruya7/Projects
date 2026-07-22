@@ -60,6 +60,11 @@ function seed(db: Database.Database): void {
     ['Fees', 110],
     ['Salary', 115],
     ['Income', 120],
+    // Loans are real cash movements the user wants reflected in the totals (unlike
+    // Transfers, which are internal and excluded): a Loan In counts as income, a
+    // Loan Repayment counts as spend — but both are tagged "loan" in the UI.
+    ['Loan In', 122],
+    ['Loan Repayment', 124],
     ['Transfers', 130],
     ['Other', 140],
   ];

@@ -68,14 +68,26 @@ export function Transactions(): JSX.Element {
   // do. Card "positives" are refunds, not income, so they're excluded too.
   const spendByCur = new Map<string, number>();
   const incomeByCur = new Map<string, number>();
+  // How much of the income/spend is borrowed money vs a repayment, so we can flag
+  // it up top ("incl. … loan") — a loan isn't real income, a repayment isn't a
+  // normal expense, but both are real cash movements the user wants to see.
+  const loanInByCur = new Map<string, number>();
+  const loanOutByCur = new Map<string, number>();
   let hasTransfers = false;
   for (const e of entries) {
     if (e.category === 'Transfers') { hasTransfers = true; continue; }
-    if (e.amount < 0) spendByCur.set(e.currency, (spendByCur.get(e.currency) ?? 0) + Math.abs(e.amount));
-    else if (e.sourceType !== 'card') incomeByCur.set(e.currency, (incomeByCur.get(e.currency) ?? 0) + e.amount);
+    if (e.amount < 0) {
+      spendByCur.set(e.currency, (spendByCur.get(e.currency) ?? 0) + Math.abs(e.amount));
+      if (e.category === 'Loan Repayment') loanOutByCur.set(e.currency, (loanOutByCur.get(e.currency) ?? 0) + Math.abs(e.amount));
+    } else if (e.sourceType !== 'card') {
+      incomeByCur.set(e.currency, (incomeByCur.get(e.currency) ?? 0) + e.amount);
+      if (e.category === 'Loan In') loanInByCur.set(e.currency, (loanInByCur.get(e.currency) ?? 0) + e.amount);
+    }
   }
   const spendParts = [...spendByCur.entries()].sort((a, b) => b[1] - a[1]).map(([c, v]) => formatMoney(v, c));
   const incomeParts = [...incomeByCur.entries()].sort((a, b) => b[1] - a[1]).map(([c, v]) => formatMoney(v, c));
+  const loanInParts = [...loanInByCur.entries()].sort((a, b) => b[1] - a[1]).map(([c, v]) => formatMoney(v, c));
+  const loanOutParts = [...loanOutByCur.entries()].sort((a, b) => b[1] - a[1]).map(([c, v]) => formatMoney(v, c));
   // Net per currency: income − spend, shown only when there is income to net against.
   const netCurrencies = [...new Set([...spendByCur.keys(), ...incomeByCur.keys()])];
   const netParts = netCurrencies
@@ -196,6 +208,9 @@ export function Transactions(): JSX.Element {
               <div className="tnum text-2xl font-semibold text-expense leading-tight">
                 {spendParts.length ? spendParts.map((p) => `-${p}`).join(' · ') : formatMoney(0)}
               </div>
+              {loanOutParts.length > 0 && (
+                <div className="text-[10px] mt-0.5" style={{ color: 'var(--warning)' }}>incl. {loanOutParts.join(' · ')} loan repaid</div>
+              )}
               {hasTransfers && <div className="text-[10px] text-muted mt-0.5">excludes transfers</div>}
             </div>
             {incomeParts.length > 0 && (
@@ -204,6 +219,9 @@ export function Transactions(): JSX.Element {
                 <div className="tnum text-2xl font-semibold text-income leading-tight">
                   {incomeParts.map((p) => `+${p}`).join(' · ')}
                 </div>
+                {loanInParts.length > 0 && (
+                  <div className="text-[10px] mt-0.5" style={{ color: 'var(--warning)' }}>incl. {loanInParts.join(' · ')} loan</div>
+                )}
               </div>
             )}
             {incomeParts.length > 0 && (
@@ -315,6 +333,9 @@ function CategoryGroups({
               <span className="text-muted text-xs">{g.count}</span>
               {g.key === 'Transfers' && (
                 <span className="text-[10px] text-muted border border-edge rounded-full px-1.5 py-0.5">not counted</span>
+              )}
+              {(g.key === 'Loan In' || g.key === 'Loan Repayment') && (
+                <span className="text-[10px] rounded-full px-1.5 py-0.5" style={{ color: 'var(--warning)', border: '1px solid var(--warning)' }}>loan</span>
               )}
               <span className={`tnum ml-auto text-sm font-semibold whitespace-nowrap ${g.positive ? 'text-income' : 'text-expense'}`}>
                 {g.parts.length ? g.parts.join(' · ') : formatMoney(0)}

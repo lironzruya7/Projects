@@ -13,6 +13,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   Travel: '#fbbf24',
   Fees: '#fca5a5',
   Income: '#10b981',
+  'Loan In': '#eab308',
+  'Loan Repayment': '#f97316',
   Transfers: '#94a3b8',
   Other: '#818cf8',
   Uncategorized: '#64748b',
