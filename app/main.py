@@ -337,6 +337,17 @@ def run_command(req: ExecRequest) -> ExecResponse:
         effective_timeout = req.timeout if req.timeout is not None else profile["timeout_default"]
         effective_timeout = max(5, min(effective_timeout, profile["timeout_cap"]))
 
+        # Clamp --cpus to the host's CPU count: docker errors hard (exit 125) if
+        # asked for more CPUs than exist. This lets the heavy profile ask for
+        # "more CPU" where the hardware allows, without failing on small boxes.
+        cpus = profile["cpus"]
+        try:
+            host_cpus = os.cpu_count() or 1
+            if float(cpus) > host_cpus:
+                cpus = str(host_cpus)
+        except (TypeError, ValueError):
+            pass
+
         # 3) Assemble the hardened `docker run` invocation.
         network = "none" if req.network == "none" else "bridge"
 
@@ -357,7 +368,7 @@ def run_command(req: ExecRequest) -> ExecResponse:
             "--security-opt", "no-new-privileges",
             "--pids-limit", PIDS_LIMIT,
             "--memory", profile["memory"],
-            "--cpus", profile["cpus"],
+            "--cpus", cpus,
             "--user", CONTAINER_USER,
             "-v", f"{workdir}:/work:rw",
         ]

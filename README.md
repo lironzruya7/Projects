@@ -198,6 +198,10 @@ docker build -t sec-toolbox-heavy:latest -f docker/Dockerfile.heavy       docker
 | base  | 2g     | 2    | 60s             | 600s        |
 | heavy | 4g     | 4    | 300s            | 1800s       |
 
+`--cpus` is clamped to the host's CPU count, so the heavy profile asking for `4`
+on a 2-CPU box runs with `2` instead of failing (`docker` errors hard if asked
+for more CPUs than exist). On larger hardware it uses the full value.
+
 **Security is identical to base** and non-negotiable: `--network none` is still
 the **default** for heavy (RE/forensics is offline; egress is opt-in + `raw`
 exactly as base), `--cap-drop ALL`, non-root (`uid 999`), `--rm`, rlimits, and
