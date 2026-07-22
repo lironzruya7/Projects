@@ -15,7 +15,7 @@ import {
 import type { DashboardSummary } from '../api/client';
 import { api } from '../api/client';
 import { Donut, type DonutDatum } from '../components/Donut';
-import { Bidi, Card, Spinner, StatCard } from '../components/ui';
+import { Bidi, Card, Skeleton, StatCard } from '../components/ui';
 import { categoryColor } from '../lib/colors';
 import { accountColor, accountLabel } from '../lib/accounts';
 import { addMonths, currencySymbol, formatMoney, formatMonth, formatMonthLong } from '../lib/format';
@@ -40,7 +40,7 @@ export function Dashboard(): JSX.Element {
   }, [month, curFilter]);
 
   if (error) return <Card><div className="text-rose-400">Failed to load: {error}</div></Card>;
-  if (!data) return <Spinner label="Building dashboard…" />;
+  if (!data) return <DashboardSkeleton />;
 
   const { totals, currency } = data;
   const empty = data.counts.ledger === 0;
@@ -115,10 +115,24 @@ export function Dashboard(): JSX.Element {
 
       {empty && (
         <Card className="text-center py-10">
-          <div className="text-lg mb-2">No data yet</div>
-          <div className="text-muted text-sm">
-            Go to <span className="text-brand">Import</span> to upload an export, or connect email in{' '}
-            <span className="text-brand">More → Settings</span>.
+          <div className="text-4xl mb-3">📊</div>
+          <div className="text-lg mb-1 font-medium">No data yet</div>
+          <div className="text-muted text-sm mb-4">
+            Upload a bank, card, or PayPal export — or connect email — to see your money at a glance.
+          </div>
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => nav('/import')}
+              className="bg-brand text-slate-900 font-medium px-4 py-2 rounded-lg text-sm active:scale-[0.97] transition-transform"
+            >
+              Import a statement
+            </button>
+            <button
+              onClick={() => nav('/settings')}
+              className="border border-edge text-ink px-4 py-2 rounded-lg text-sm hover:border-brand transition-colors"
+            >
+              Connect email
+            </button>
           </div>
         </Card>
       )}
@@ -195,7 +209,7 @@ export function Dashboard(): JSX.Element {
                     <span className="w-3 h-3 rounded-full shrink-0" style={{ background: categoryColor(c.category) }} />
                     <span className="truncate text-sm">{c.category}</span>
                   </span>
-                  <span className="text-muted text-xs whitespace-nowrap">{formatMoney(c.amount, currency)}</span>
+                  <span className="tnum text-muted text-xs whitespace-nowrap">{formatMoney(c.amount, currency)}</span>
                 </button>
               ))}
             </div>
@@ -220,9 +234,9 @@ export function Dashboard(): JSX.Element {
                   <span>{currencySymbol(c.currency)} {c.currency}</span>
                   <span>{c.count} txns</span>
                 </div>
-                <div className="text-xl font-semibold mt-1">{formatMoney(c.expense, c.currency)}</div>
+                <div className="tnum text-xl font-semibold mt-1">{formatMoney(c.expense, c.currency)}</div>
                 {c.income > 0 && (
-                  <div className="text-xs text-emerald-400 mt-0.5">+ {formatMoney(c.income, c.currency)} in</div>
+                  <div className="tnum text-xs text-emerald-400 mt-0.5">+ {formatMoney(c.income, c.currency)} in</div>
                 )}
               </button>
             ))}
@@ -257,7 +271,7 @@ export function Dashboard(): JSX.Element {
                       {label}
                       <span className="text-muted text-xs">· {a.count}</span>
                     </span>
-                    <span className="text-muted whitespace-nowrap">{formatMoney(a.amount, currency)}</span>
+                    <span className="tnum text-muted whitespace-nowrap">{formatMoney(a.amount, currency)}</span>
                   </div>
                   <div className="h-2 bg-panel2 rounded-full overflow-hidden">
                     <div className="h-full rounded-full" style={{ width: `${(a.amount / max) * 100}%`, background: color }} />
@@ -326,7 +340,7 @@ export function Dashboard(): JSX.Element {
                 >
                   <div className="flex justify-between text-sm mb-1">
                     <Bidi className="truncate max-w-[60%]">{m.merchant || '(unknown)'}</Bidi>
-                    <span className="text-muted whitespace-nowrap">{formatMoney(m.amount, currency)}</span>
+                    <span className="tnum text-muted whitespace-nowrap">{formatMoney(m.amount, currency)}</span>
                   </div>
                   <div className="h-2 bg-panel2 rounded-full overflow-hidden">
                     <div className="h-full rounded-full" style={{ width: `${(m.amount / max) * 100}%`, background: color }} />
@@ -343,4 +357,24 @@ export function Dashboard(): JSX.Element {
 
 function Empty(): JSX.Element {
   return <div className="text-muted text-sm py-8 text-center">No data for this period.</div>;
+}
+
+/** Shaped placeholder shown while the dashboard loads — matches the real layout
+ *  so the first paint doesn't jump (no lonely spinner, no layout shift). */
+function DashboardSkeleton(): JSX.Element {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-8 w-40 hidden md:block" />
+        <Skeleton className="h-10 w-44 rounded-full ml-auto" />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Skeleton key={i} className="h-24 rounded-2xl" />
+        ))}
+      </div>
+      <Skeleton className="h-64 rounded-xl" />
+      <Skeleton className="h-56 rounded-xl" />
+    </div>
+  );
 }

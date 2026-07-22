@@ -5,11 +5,94 @@
 @layer components {
   .input {
     @apply w-full mt-1 bg-panel2 border border-edge rounded-lg px-2 py-1.5 text-sm text-ink;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  .input:focus {
+    @apply outline-none border-brand;
+    box-shadow: 0 0 0 3px rgb(56 189 248 / 0.18);
   }
 }
 
 :root {
   color-scheme: dark;
+
+  /* Semantic tokens — one source of truth for money/status colors, so charts,
+     numbers and chips all read consistently. */
+  --income: #34d399; /* money in  */
+  --expense: #fb7185; /* money out (attention, not alarm) */
+  --warning: #fbbf24;
+  --info: #38bdf8;
+
+  /* Elevation + focus */
+  --ring: 56 189 248; /* brand, as rgb channels for alpha use */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.5);
+}
+
+/* Money and any figure that should not jitter as digits change: fixed-width,
+   lining figures. This is the single biggest "feels like a finance app" tweak. */
+.tnum {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}
+
+/* Keyboard focus ring — visible for keyboard users, invisible on mouse/touch.
+   Applies to every interactive element that doesn't opt out. */
+:focus-visible {
+  outline: 2px solid rgb(var(--ring));
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* Pointer interactions shouldn't show the ring (only :focus-visible does). */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Loading skeleton: a soft shimmering placeholder that matches perceived
+   content shape, so the first paint isn't a lonely spinner. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #1e293b;
+  border-radius: 0.75rem;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(148 163 184 / 0.10), transparent);
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Gentle entrance for content cards — a small, once-off rise + fade. */
+@keyframes riseIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise-in {
+  animation: riseIn 0.28s ease both;
+}
+
+/* Respect users who ask for less motion: kill non-essential animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 
 html,

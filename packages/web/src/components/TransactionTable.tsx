@@ -128,7 +128,7 @@ export function TransactionTable({
                   )}
                 </div>
               </div>
-              <div className={`text-right whitespace-nowrap font-semibold ${e.amount < 0 ? 'text-ink' : 'text-emerald-400'}`}>
+              <div className={`tnum text-right whitespace-nowrap font-semibold ${e.amount < 0 ? 'text-ink' : 'text-emerald-400'}`}>
                 {formatMoney(e.amount, e.currency, { sign: true })}
                 {e.currency !== 'ILS' && <span className="text-[10px] text-muted ml-1 align-middle">{e.currency}</span>}
               </div>

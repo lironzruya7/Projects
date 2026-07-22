@@ -28,6 +28,11 @@ export function Card({
   );
 }
 
+/** A shimmering placeholder block sized like the content it stands in for. */
+export function Skeleton({ className = '' }: { className?: string }): JSX.Element {
+  return <div className={`skeleton ${className}`} aria-hidden="true" />;
+}
+
 export function StatCard({
   label,
   value,
@@ -49,10 +54,13 @@ export function StatCard({
     accent === 'up' ? 'text-rose-400' : accent === 'down' ? 'text-emerald-400' : 'text-ink';
   return (
     <div
-      className={`relative overflow-hidden bg-panel border border-edge rounded-2xl p-4 ${
-        onClick ? 'cursor-pointer active:scale-[0.98] hover:border-brand transition-all' : ''
+      className={`relative overflow-hidden bg-panel border border-edge rounded-2xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.3)] ${
+        onClick ? 'cursor-pointer active:scale-[0.98] hover:border-brand hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.6)] transition-all' : ''
       }`}
       onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
       style={{ background: `linear-gradient(135deg, ${tint}14, transparent 60%)` }}
     >
       <div className="absolute left-0 top-0 h-full w-1" style={{ background: tint }} />
@@ -60,7 +68,7 @@ export function StatCard({
         <div className="text-muted text-xs uppercase tracking-wide">{label}</div>
         {icon && <span className="text-lg opacity-80" style={{ color: tint }}>{icon}</span>}
       </div>
-      <div className={`text-2xl font-semibold mt-1 ${accentColor}`}>{value}</div>
+      <div className={`tnum text-2xl font-semibold mt-1 tracking-tight ${accentColor}`}>{value}</div>
       {sub && <div className="text-muted text-sm mt-1">{sub}</div>}
     </div>
   );
@@ -104,7 +112,7 @@ export function Button({
       type={type}
       onClick={onClick}
       disabled={disabled}
-      className={`px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${variants[variant]} ${className}`}
+      className={`px-3 py-1.5 rounded-lg text-sm select-none transition-all active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100 ${variants[variant]} ${className}`}
     >
       {children}
     </button>
