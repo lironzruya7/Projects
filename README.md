@@ -28,6 +28,7 @@ tailnet client ──HTTPS──▶ tailscale serve :443 ──▶ 127.0.0.1:800
 | `docker/Dockerfile.sec-toolbox` | The lean default `sec-toolbox:latest` image |
 | `docker/Dockerfile.heavy` | Reserved, opt-in `sec-toolbox-heavy:latest` (Ghidra/Volatility3/…) |
 | `deploy/cyber-exec.service` | systemd unit |
+| `deploy/egress-firewall.sh` | Host firewall: restrict egress-mode to internet-only |
 | `scripts/smoke_test.sh` | End-to-end smoke test (base) |
 | `scripts/smoke_heavy.sh` | Smoke test for the heavy image |
 | `.env.example` | Token + optional overrides |
@@ -159,6 +160,25 @@ Every container runs with:
   persistence** between runs.
 - The container is **never** added to the tailnet.
 
+Egress isolation (important):
+
+- `network: "none"` (the default) = no network at all — fully isolated.
+- `network: "egress"` uses Docker **bridge**, which routes through the host and
+  can therefore reach the **tailnet** (`100.64.0.0/10`), the private **LAN**
+  (RFC1918) and cloud **metadata** (`169.254.169.254`), not just the public
+  internet. To restrict egress to internet-only, run
+  `sudo deploy/egress-firewall.sh install` on the host — it adds `DOCKER-USER`
+  DROP rules for those ranges (v4 + v6). Without it, an egress-mode command is a
+  potential pivot into your private network.
+
+Robustness:
+
+- On startup the service sweeps stale `cyber-exec-*` workdirs and dangling
+  `cyberexec-*` containers left by a hard-killed run (`finally` teardown does
+  not run on SIGKILL/OOM/power loss).
+- Workdir teardown falls back to a root-container wipe for container-created
+  subdirs the service user can't remove, and logs a LEAK if anything survives.
+
 Service-level:
 
 - Binds `127.0.0.1:8000` only; tailnet exposure via `tailscale serve`.
@@ -183,13 +203,18 @@ resolves ISF symbols from an optional, pre-populated cache (see below).
 Build order (base first, then heavy):
 
 ```bash
-docker build -t sec-toolbox:latest       -f docker/Dockerfile.sec-toolbox docker/
-docker build -t sec-toolbox-heavy:latest -f docker/Dockerfile.heavy       docker/
-# For a verified Ghidra download, pass the release's SHA-256:
-#   --build-arg GHIDRA_SHA256=<sha256 from the Ghidra release page>
+docker build -t sec-toolbox:latest -f docker/Dockerfile.sec-toolbox docker/
+# GHIDRA_SHA256 is REQUIRED (integrity-verified build; get it from the Ghidra
+# release page). The build fails without it.
+docker build -t sec-toolbox-heavy:latest -f docker/Dockerfile.heavy docker/ \
+  --build-arg GHIDRA_SHA256=<sha256 from the Ghidra release page>
 # If the pinned Ghidra asset 404s (superseded), also override:
 #   --build-arg GHIDRA_VERSION=<x.y.z> --build-arg GHIDRA_DATE=<YYYYMMDD>
 ```
+
+The `pdfid`/`pdf-parser` scripts in the base image are pinned by SHA-256, so a
+tampered/changed upstream fails the build (bump the `*_SHA256` build-args after
+reviewing a legitimate upstream change).
 
 **Resource envelope** (per image; base untouched):
 

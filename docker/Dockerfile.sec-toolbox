@@ -70,9 +70,17 @@ RUN set -eux; \
 # (Not on PyPI; fetched from the upstream suite and put on PATH.)
 # ---------------------------------------------------------------------------
 ARG DSS_RAW=https://raw.githubusercontent.com/DidierStevens/DidierStevensSuite/master
+# Pinned content hashes: the build FAILS if upstream content changes (tamper /
+# drift detection). Bump these deliberately after reviewing an upstream change.
+# (For full reproducibility, pin DSS_RAW to a commit sha instead of `master`.)
+ARG PDFID_SHA256=e958a01f1c2596470f27d3c308061b85d7059ff476a58d74f1957a71b4f1248f
+ARG PDF_PARSER_SHA256=a9fa2faa25e88ab0293543d14aa168ff21fc9fd25a0a8ad657b0dad3171214ac
 RUN set -eux; \
     curl -fsSL -o /usr/local/bin/pdfid      "${DSS_RAW}/pdfid.py"; \
     curl -fsSL -o /usr/local/bin/pdf-parser "${DSS_RAW}/pdf-parser.py"; \
+    # Verify integrity BEFORE modifying the files.
+    echo "${PDFID_SHA256}  /usr/local/bin/pdfid" | sha256sum -c -; \
+    echo "${PDF_PARSER_SHA256}  /usr/local/bin/pdf-parser" | sha256sum -c -; \
     # Upstream shebang is `env python`; Kali only ships python3.
     sed -i '1s|.*|#!/usr/bin/env python3|' /usr/local/bin/pdfid /usr/local/bin/pdf-parser; \
     chmod +x /usr/local/bin/pdfid /usr/local/bin/pdf-parser; \

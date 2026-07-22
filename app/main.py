@@ -440,7 +440,7 @@ def run_command(req: ExecRequest) -> ExecResponse:
         # Always teardown the container (belt-and-suspenders with --rm) and
         # delete the throwaway workdir. No persistence between runs.
         _docker_rm(container_name)
-        shutil.rmtree(workdir, ignore_errors=True)
+        _cleanup_workdir(workdir)
 
 
 def _docker_kill(name: str) -> None:
@@ -465,11 +465,71 @@ def _docker_rm(name: str) -> None:
         log.warning("docker rm failed for %s: %s", name, exc)
 
 
+def _cleanup_workdir(workdir: str) -> None:
+    """Delete the throwaway workdir. A container-created subdir may be owned by
+    the container uid with a restrictive mode (e.g. 0700) that the (different)
+    service user cannot traverse, so a plain rmtree would silently leave data
+    behind. In that case wipe the contents from inside a throwaway root
+    container (no network, all caps dropped), then drop the empty dir. Log a
+    LEAK if anything survives instead of swallowing it (F2)."""
+    shutil.rmtree(workdir, ignore_errors=True)
+    if not os.path.exists(workdir):
+        return
+    log.warning("workdir %s not fully removed; using root-container cleanup", workdir)
+    try:
+        subprocess.run(
+            [DOCKER_BIN, "run", "--rm", "--network", "none",
+             "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+             "--user", "0", "-v", f"{workdir}:/work:rw", IMAGE,
+             "find", "/work", "-mindepth", "1", "-delete"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=60, check=False,
+        )
+    except Exception as exc:  # pragma: no cover - best effort
+        log.warning("root-container cleanup failed for %s: %s", workdir, exc)
+    shutil.rmtree(workdir, ignore_errors=True)
+    if os.path.exists(workdir):
+        log.error("workdir LEAK: could not remove %s", workdir)
+
+
+def _startup_sweep() -> None:
+    """Remove stale throwaway workdirs and dangling `cyberexec-*` containers on
+    startup. The per-request finally teardown does not run on SIGKILL/OOM/power
+    loss, so a hard-killed run can orphan its workdir and container (F3)."""
+    try:
+        for name in os.listdir(WORK_ROOT):
+            if name.startswith("cyber-exec-"):
+                _cleanup_workdir(os.path.join(WORK_ROOT, name))
+    except FileNotFoundError:
+        pass
+    except Exception as exc:  # pragma: no cover - best effort
+        log.warning("startup workdir sweep failed: %s", exc)
+    try:
+        res = subprocess.run(
+            [DOCKER_BIN, "ps", "-aq", "--filter", "name=cyberexec-"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            timeout=20, check=False, text=True,
+        )
+        ids = [x for x in (res.stdout or "").split() if x]
+        if ids:
+            log.warning("startup: removing %d stale cyberexec-* container(s)", len(ids))
+            subprocess.run(
+                [DOCKER_BIN, "rm", "-f", *ids],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=60, check=False,
+            )
+    except Exception as exc:  # pragma: no cover - best effort
+        log.warning("startup container sweep failed: %s", exc)
+
+
 # --------------------------------------------------------------------------- #
 # App
 # --------------------------------------------------------------------------- #
 
 app = FastAPI(title="cyber-exec", version="1.0.0")
+
+# Sweep any workdirs/containers orphaned by a previous hard-killed run (F3).
+_startup_sweep()
 
 
 @app.exception_handler(RateLimited)

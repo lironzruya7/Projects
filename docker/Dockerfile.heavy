@@ -55,18 +55,21 @@ RUN pip3 install --no-cache-dir --break-system-packages flare-floss \
 # ---------------------------------------------------------------------------
 ARG GHIDRA_VERSION=11.2.1
 ARG GHIDRA_DATE=20241105
-ARG GHIDRA_SHA256=
+# REQUIRED: the SHA-256 of the release zip (from the Ghidra release page). The
+# build fails without it, so no unverified Ghidra ever lands in the image.
+#   docker build ... --build-arg GHIDRA_SHA256=<sha256>
+ARG GHIDRA_SHA256
 RUN set -eux; \
+    if [ -z "${GHIDRA_SHA256}" ]; then \
+        echo "ERROR: GHIDRA_SHA256 build-arg is required (get it from the Ghidra release page)"; \
+        exit 1; \
+    fi; \
     base="https://github.com/NationalSecurityAgency/ghidra/releases/download"; \
     zip="ghidra_${GHIDRA_VERSION}_PUBLIC_${GHIDRA_DATE}.zip"; \
     url="${base}/Ghidra_${GHIDRA_VERSION}_build/${zip}"; \
     echo "Fetching ${url}"; \
     curl -fSL -o /tmp/ghidra.zip "${url}"; \
-    if [ -n "${GHIDRA_SHA256}" ]; then \
-        echo "${GHIDRA_SHA256}  /tmp/ghidra.zip" | sha256sum -c -; \
-    else \
-        echo "WARNING: GHIDRA_SHA256 not set — skipping integrity check"; \
-    fi; \
+    echo "${GHIDRA_SHA256}  /tmp/ghidra.zip" | sha256sum -c -; \
     unzip -q /tmp/ghidra.zip -d /opt; \
     mv "/opt/ghidra_${GHIDRA_VERSION}_PUBLIC" /opt/ghidra; \
     ln -s /opt/ghidra/support/analyzeHeadless /usr/local/bin/analyzeHeadless; \
