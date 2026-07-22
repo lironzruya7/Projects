@@ -17,22 +17,35 @@ USER root
 ENV DEBIAN_FRONTEND=noninteractive
 
 # ---------------------------------------------------------------------------
-# Java (for Ghidra) + unzip. Ghidra 11.2+ needs JDK 21.
+# Java (for Ghidra) + unzip + build prereqs for any source-built wheels
+# (Kali ships Python 3.13; some deps may need compiling). Ghidra 11.2+ = JDK 21.
 # ---------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openjdk-21-jdk-headless \
         unzip \
+        build-essential \
+        python3-dev \
+        libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
+RUN pip3 install --no-cache-dir --break-system-packages --upgrade pip setuptools wheel
+
 # ---------------------------------------------------------------------------
-# Volatility3 + capa + floss (yara CLI already present in base).
+# Volatility3 — REQUIRED (forensics smoke depends on it). Installed on its own
+# so its resolver run can't be broken by capa/floss dependency pins.
 # NOTE: no Windows symbol packs are baked in — vol3 resolves ISF symbols from
 # an (optionally mounted, pre-populated) cache at run time. See README.
 # ---------------------------------------------------------------------------
-RUN pip3 install --no-cache-dir --break-system-packages \
-        volatility3 \
-        flare-capa \
-        flare-floss
+RUN pip3 install --no-cache-dir --break-system-packages volatility3
+
+# capa + floss — OPTIONAL tight add-ons (yara CLI already in base). Their
+# dependency trees are heavier; if they don't resolve on this Python they must
+# NOT fail the image (the required tools are Ghidra + vol3). Installed
+# separately and best-effort; a WARNING is printed if either is unavailable.
+RUN pip3 install --no-cache-dir --break-system-packages flare-capa \
+      || echo "WARNING: flare-capa not installed (optional)"
+RUN pip3 install --no-cache-dir --break-system-packages flare-floss \
+      || echo "WARNING: flare-floss not installed (optional)"
 
 # ---------------------------------------------------------------------------
 # Ghidra — official release, headless only.

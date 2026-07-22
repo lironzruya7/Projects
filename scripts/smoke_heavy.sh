@@ -31,7 +31,7 @@ echo "  expect: uid != 0, NET-UNREACHABLE, DNS-NONE"
 echo "############ (b) volatility3 present"
 curl -fsS -X POST "$BASE/api/exec" -H "$AUTH" -H "$CT" -d '{
   "image":"heavy","network":"none","timeout":120,
-  "command":"vol -h 2>&1 | head -3; echo ---; python3 -c \"import volatility3, sys; print(\\\"vol3\\\", volatility3.__version__)\""
+  "command":"vol -h 2>&1 | head -5; echo ---; python3 -c \"from volatility3.framework import constants; print(\\\"vol3\\\", constants.PACKAGE_VERSION)\""
 }' | { jq_available && jq '{ok,exit_code,stdout}' || cat; }
 
 echo "############ (a) Ghidra headless decompile -> pseudo-C"
