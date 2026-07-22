@@ -25,9 +25,11 @@ tailnet client ──HTTPS──▶ tailscale serve :443 ──▶ 127.0.0.1:800
 | `app/main.py` | FastAPI service (`POST /api/exec`) |
 | `app/run.sh` | Start the service bound to `127.0.0.1:8000` |
 | `app/requirements.txt` | Python deps |
-| `docker/Dockerfile.sec-toolbox` | The `sec-toolbox:latest` image |
+| `docker/Dockerfile.sec-toolbox` | The lean default `sec-toolbox:latest` image |
+| `docker/Dockerfile.heavy` | Reserved, opt-in `sec-toolbox-heavy:latest` (Ghidra/Volatility3/…) |
 | `deploy/cyber-exec.service` | systemd unit |
-| `scripts/smoke_test.sh` | End-to-end smoke test |
+| `scripts/smoke_test.sh` | End-to-end smoke test (base) |
+| `scripts/smoke_heavy.sh` | Smoke test for the heavy image |
 | `.env.example` | Token + optional overrides |
 
 ## Setup
@@ -89,6 +91,11 @@ Request:
 | `timeout` | int | Seconds, `5..600`. Container is killed on overrun |
 | `files` | array (optional) | `{name, b64}`; base64-decoded into `/work`. `name` must be a plain basename |
 | `raw` | bool (optional) | **Default `false`**. When `true` **and** `network == "egress"`, adds **only** `--cap-add NET_RAW` (for `nmap -sS`, `masscan`, etc.). Ignored under `network: "none"`. No other capability is ever added |
+| `image` | `"base"` \| `"heavy"` (optional) | **Default `"base"`** (lean, fast). `"heavy"` uses the reserved RE/forensics image. Absent/unknown/wrong-type → falls back to `base` (never errors) |
+
+`timeout` defaults and caps are **per image**: base = default `60`, cap `600`;
+heavy = default `300`, cap `1800`. Omit `timeout` to take the image default; a
+value above the image cap is clamped down (never an error).
 
 Response:
 
@@ -134,6 +141,57 @@ Service-level:
   from `.env` and **never logged**. Commands *are* logged locally.
 - `deploy/cyber-exec.service` adds `NoNewPrivileges`, `ProtectSystem=strict`,
   `PrivateTmp`, etc. for the service process itself.
+
+## Heavy image (`sec-toolbox-heavy:latest`) — reserved, opt-in
+
+The lean `sec-toolbox:latest` stays the **default** for fast spin-up. A separate
+`sec-toolbox-heavy:latest` (from `docker/Dockerfile.heavy`) adds RE/forensics
+tooling and is **only** used when a request sets `{"image":"heavy"}`. It is
+built **FROM** the base, so it is literally base + additions; the base build and
+tag are never modified.
+
+Heavy adds: **OpenJDK 21**, **Ghidra** (headless only — `analyzeHeadless` on
+`PATH`, no GUI), **Volatility3**, plus **yara** (already in base), **capa**,
+**floss**. No GUI/Android tooling. No Windows symbol packs are baked in — vol3
+resolves ISF symbols from an optional, pre-populated cache (see below).
+
+Build order (base first, then heavy):
+
+```bash
+docker build -t sec-toolbox:latest       -f docker/Dockerfile.sec-toolbox docker/
+docker build -t sec-toolbox-heavy:latest -f docker/Dockerfile.heavy       docker/
+# For a verified Ghidra download, pass the release's SHA-256:
+#   --build-arg GHIDRA_SHA256=<sha256 from the Ghidra release page>
+# If the pinned Ghidra asset 404s (superseded), also override:
+#   --build-arg GHIDRA_VERSION=<x.y.z> --build-arg GHIDRA_DATE=<YYYYMMDD>
+```
+
+**Resource envelope** (per image; base untouched):
+
+| image | memory | cpus | timeout default | timeout cap |
+|-------|--------|------|-----------------|-------------|
+| base  | 2g     | 2    | 60s             | 600s        |
+| heavy | 4g     | 4    | 300s            | 1800s       |
+
+**Security is identical to base** and non-negotiable: `--network none` is still
+the **default** for heavy (RE/forensics is offline; egress is opt-in + `raw`
+exactly as base), `--cap-drop ALL`, non-root (`uid 999`), `--rm`, rlimits, and
+**no host mounts beyond the ephemeral `/work`** — plus one optional, read-only
+Volatility symbol cache.
+
+**Volatility3 symbol cache (optional):** set `SEC_TOOLBOX_VOL_CACHE=<host dir>`.
+When set, it is bind-mounted **read-only** at `/opt/vol-symbols` in the heavy
+container *only*. Pre-populate it offline (network is `none` at analysis time).
+
+**Smoke** (run on the box after building; see `scripts/smoke_heavy.sh`):
+
+```bash
+CYBER_EXEC_TOKEN=... ./scripts/smoke_heavy.sh [base_url] [linux_dump_path]
+```
+
+Covers: (a) `analyzeHeadless` decompiles a small binary → pseudo-C; (b) `vol -h`
+(+ `linux.pslist` on a provided dump); (c) re-confirms non-root, `--network
+none`, and no network reachable.
 
 ## Workdir root & `files`
 

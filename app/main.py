@@ -57,6 +57,39 @@ PIDS_LIMIT = os.environ.get("SEC_TOOLBOX_PIDS", "512")
 MEMORY_LIMIT = os.environ.get("SEC_TOOLBOX_MEMORY", "2g")
 CPUS_LIMIT = os.environ.get("SEC_TOOLBOX_CPUS", "2")
 
+# Per-image profiles. "base" is the lean default (fast spin-up); "heavy" is the
+# reserved, opt-in RE/forensics image. Each profile carries its OWN resource
+# envelope and timeout default/cap — the base envelope is untouched. The heavy
+# image is never used unless a request explicitly asks for {"image":"heavy"}.
+IMAGE_PROFILES = {
+    "base": {
+        "image": IMAGE,
+        "memory": MEMORY_LIMIT,
+        "cpus": CPUS_LIMIT,
+        "timeout_default": 60,
+        "timeout_cap": 600,
+    },
+    "heavy": {
+        "image": os.environ.get("SEC_TOOLBOX_HEAVY_IMAGE", "sec-toolbox-heavy:latest"),
+        "memory": os.environ.get("SEC_TOOLBOX_HEAVY_MEMORY", "4g"),
+        "cpus": os.environ.get("SEC_TOOLBOX_HEAVY_CPUS", "4"),
+        "timeout_default": int(os.environ.get("SEC_TOOLBOX_HEAVY_TIMEOUT_DEFAULT", "300")),
+        "timeout_cap": int(os.environ.get("SEC_TOOLBOX_HEAVY_TIMEOUT_CAP", "1800")),
+    },
+}
+DEFAULT_IMAGE = "base"
+
+# Optional, read-only Volatility3 symbol cache (host dir). When set AND the
+# request uses the heavy image, it is bind-mounted read-only into the heavy
+# container so pre-populated ISF symbols are available offline. Empty = no
+# extra mount (the default: nothing beyond the ephemeral /work is ever mounted).
+VOL_SYMBOL_CACHE = os.environ.get("SEC_TOOLBOX_VOL_CACHE", "")
+# Where vol3 looks for extra symbol tables inside the container.
+VOL_SYMBOL_MOUNT = "/opt/vol-symbols"
+
+# Upper sanity bound for any timeout before per-image capping (== max heavy cap).
+MAX_TIMEOUT_HARD = 1800
+
 TOKEN = os.environ.get("CYBER_EXEC_TOKEN", "")
 
 # --------------------------------------------------------------------------- #
@@ -102,13 +135,25 @@ class InputFile(BaseModel):
 class ExecRequest(BaseModel):
     command: str = Field(..., min_length=1)
     network: Literal["none", "egress"] = "none"
-    timeout: int = Field(60, ge=5, le=600)
+    # timeout is optional; when omitted it defaults to the selected image's
+    # default, and is capped to that image's ceiling. Bounded to a hard max so
+    # a request can never exceed the largest configured cap.
+    timeout: Optional[int] = Field(None, ge=5, le=MAX_TIMEOUT_HARD)
     files: Optional[List[InputFile]] = None
     # Opt-in raw sockets (e.g. nmap -sS, masscan). ONLY honored when
     # network == "egress"; ignored under "none" (raw sockets are meaningless
     # without a network). When honored, adds *only* CAP_NET_RAW on top of the
     # default --cap-drop ALL — no other capability.
     raw: bool = False
+    # Which toolbox image to run. "base" (lean, default) or "heavy" (reserved
+    # RE/forensics). Absent/unknown/wrong-type ALL fall back to "base" — this
+    # field must never break existing flows, so it is normalized, not validated.
+    image: str = DEFAULT_IMAGE
+
+    @field_validator("image", mode="before")
+    @classmethod
+    def _normalize_image(cls, v) -> str:
+        return v if v in IMAGE_PROFILES else DEFAULT_IMAGE
 
 
 class ExecResponse(BaseModel):
@@ -196,7 +241,15 @@ def run_command(req: ExecRequest) -> ExecResponse:
                     fh.write(raw)
                 os.chmod(dest, 0o644)
 
-        # 2) Assemble the hardened `docker run` invocation.
+        # 2) Resolve the per-image profile (image, resources, timeout). The
+        # `image` field is already normalized to a known key ("base"/"heavy").
+        profile = IMAGE_PROFILES[req.image]
+        # Effective timeout: caller value or the image default, capped to the
+        # image ceiling. Security envelope differs per image; base is untouched.
+        effective_timeout = req.timeout if req.timeout is not None else profile["timeout_default"]
+        effective_timeout = max(5, min(effective_timeout, profile["timeout_cap"]))
+
+        # 3) Assemble the hardened `docker run` invocation.
         network = "none" if req.network == "none" else "bridge"
 
         # Raw sockets: only when explicitly requested AND egress is on. Under
@@ -215,18 +268,23 @@ def run_command(req: ExecRequest) -> ExecResponse:
         argv += [
             "--security-opt", "no-new-privileges",
             "--pids-limit", PIDS_LIMIT,
-            "--memory", MEMORY_LIMIT,
-            "--cpus", CPUS_LIMIT,
+            "--memory", profile["memory"],
+            "--cpus", profile["cpus"],
             "--user", CONTAINER_USER,
             "-v", f"{workdir}:/work:rw",
+        ]
+        # Optional, read-only Volatility3 symbol cache — heavy image only.
+        if req.image == "heavy" and VOL_SYMBOL_CACHE:
+            argv += ["-v", f"{VOL_SYMBOL_CACHE}:{VOL_SYMBOL_MOUNT}:ro"]
+        argv += [
             "-w", "/work",
-            IMAGE,
+            profile["image"],
             "bash", "-lc", req.command,
         ]
 
         log.info(
-            "exec network=%s raw=%s(granted=%s) timeout=%ds files=%d cmd=%r",
-            req.network, req.raw, raw_granted, req.timeout,
+            "exec image=%s network=%s raw=%s(granted=%s) timeout=%ds files=%d cmd=%r",
+            req.image, req.network, req.raw, raw_granted, effective_timeout,
             len(req.files or []), req.command,
         )
 
@@ -249,11 +307,11 @@ def run_command(req: ExecRequest) -> ExecResponse:
         t_err.start()
 
         try:
-            proc.wait(timeout=req.timeout)
+            proc.wait(timeout=effective_timeout)
         except subprocess.TimeoutExpired:
             timed_out = True
             log.warning("timeout after %ds; killing container %s",
-                        req.timeout, container_name)
+                        effective_timeout, container_name)
             # Kill the container itself (fast, reaps everything inside).
             _docker_kill(container_name)
             try:
