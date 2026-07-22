@@ -1,5 +1,8 @@
 import { parse as parseCsv } from 'csv-parse/sync';
-import * as XLSX from 'xlsx';
+// @e965/xlsx is the npm-published, patched build of SheetJS (0.20.x); the plain
+// `xlsx` package on npm is frozen at 0.18.5 and carries prototype-pollution +
+// ReDoS advisories with no npm fix. Same API, so this is a drop-in.
+import * as XLSX from '@e965/xlsx';
 import { decodeBuffer, stripDirectionalMarks } from './encoding.js';
 
 export interface Grid {
@@ -9,8 +12,17 @@ export interface Grid {
   sheetName?: string;
 }
 
+// Defensive bounds for spreadsheet parsing (defence-in-depth against a crafted
+// file causing excessive CPU/memory). Real bank/card/PayPal exports are well
+// under these — a few hundred KB and a few thousand rows.
+const MAX_TABULAR_BYTES = 25 * 1024 * 1024; // 25 MB
+const MAX_SHEET_ROWS = 200_000;
+
 /** Read a CSV or XLSX buffer into a rectangular grid of string cells. */
 export function readGrid(buf: Buffer, filename: string): Grid {
+  if (buf.length > MAX_TABULAR_BYTES) {
+    throw new Error(`File too large to parse (${Math.round(buf.length / 1024 / 1024)} MB, max 25 MB).`);
+  }
   const lower = filename.toLowerCase();
   const isExcel = lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.xlsm');
   if (isExcel || looksLikeExcel(buf)) return readXlsx(buf);
@@ -26,7 +38,9 @@ function looksLikeExcel(buf: Buffer): boolean {
 }
 
 function readXlsx(buf: Buffer): Grid {
-  const wb = XLSX.read(buf, { type: 'buffer', cellDates: false, raw: true });
+  // sheetRows bounds how many rows are materialised, capping work on a file that
+  // claims to have millions of rows.
+  const wb = XLSX.read(buf, { type: 'buffer', cellDates: false, raw: true, sheetRows: MAX_SHEET_ROWS });
   const sheetName = wb.SheetNames[0]!;
   const ws = wb.Sheets[sheetName]!;
   const arr = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, blankrows: false, defval: '' });
