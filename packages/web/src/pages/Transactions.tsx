@@ -57,12 +57,20 @@ export function Transactions(): JSX.Element {
     setParams(next);
   }
 
-  // Spend per currency (summing across currencies is meaningless).
+  // Spend / income per currency (summing across currencies is meaningless).
   const spendByCur = new Map<string, number>();
+  const incomeByCur = new Map<string, number>();
   for (const e of entries) {
     if (e.amount < 0) spendByCur.set(e.currency, (spendByCur.get(e.currency) ?? 0) + Math.abs(e.amount));
+    else incomeByCur.set(e.currency, (incomeByCur.get(e.currency) ?? 0) + e.amount);
   }
   const spendParts = [...spendByCur.entries()].sort((a, b) => b[1] - a[1]).map(([c, v]) => formatMoney(v, c));
+  const incomeParts = [...incomeByCur.entries()].sort((a, b) => b[1] - a[1]).map(([c, v]) => formatMoney(v, c));
+  // Net per currency: income − spend, shown only when there is income to net against.
+  const netCurrencies = [...new Set([...spendByCur.keys(), ...incomeByCur.keys()])];
+  const netParts = netCurrencies
+    .map((c) => (incomeByCur.get(c) ?? 0) - (spendByCur.get(c) ?? 0))
+    .map((v, i) => formatMoney(v, netCurrencies[i]!, { sign: true }));
 
   const activeFilters = Object.entries(filters).filter(([, v]) => v);
 
@@ -70,9 +78,6 @@ export function Transactions(): JSX.Element {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="hidden md:block text-2xl font-semibold">Transactions</h1>
-        <div className="tnum text-xs sm:text-sm text-muted">
-          {entries.length} entries · spend {spendParts.length ? spendParts.join(' · ') : formatMoney(0)}
-        </div>
       </div>
 
       <Card>
@@ -171,6 +176,35 @@ export function Transactions(): JSX.Element {
           )}
         </div>
       </Card>
+
+      {/* Final totals for the current filter — the "how much in this view" answer. */}
+      {!loading && (
+        <Card>
+          <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+            <div>
+              <div className="text-[11px] text-muted uppercase tracking-wide">Total spend</div>
+              <div className="tnum text-2xl font-semibold text-ink leading-tight">
+                {spendParts.length ? spendParts.join(' · ') : formatMoney(0)}
+              </div>
+            </div>
+            {incomeParts.length > 0 && (
+              <div>
+                <div className="text-[11px] text-muted uppercase tracking-wide">Income</div>
+                <div className="tnum text-2xl font-semibold text-emerald-400 leading-tight">
+                  {incomeParts.join(' · ')}
+                </div>
+              </div>
+            )}
+            {incomeParts.length > 0 && (
+              <div>
+                <div className="text-[11px] text-muted uppercase tracking-wide">Net</div>
+                <div className="tnum text-2xl font-semibold text-ink leading-tight">{netParts.join(' · ')}</div>
+              </div>
+            )}
+            <div className="tnum ml-auto text-sm text-muted self-center">{entries.length} entries</div>
+          </div>
+        </Card>
+      )}
 
       <Card>
         {loading ? <LedgerSkeleton /> : (
