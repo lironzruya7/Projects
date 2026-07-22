@@ -76,6 +76,18 @@ RUN set -eux; \
 ENV GHIDRA_INSTALL_DIR=/opt/ghidra
 
 # ---------------------------------------------------------------------------
+# Native font stack for Ghidra headless. Even in headless mode some analyzers
+# touch AWT font metrics (e.g. GccExceptionAnalyzer setting comments) and the
+# JVM throws loading libfontmanager without freetype/fontconfig/a font present.
+# Kept as its own late layer so the (large) Ghidra download layer stays cached.
+# ---------------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        fontconfig \
+        libfreetype6 \
+        fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
 # Optional persistent Volatility3 symbol cache mount point (read-only at run
 # time — see the API's SEC_TOOLBOX_VOL_CACHE plumbing). Pre-populate offline.
 # ---------------------------------------------------------------------------
