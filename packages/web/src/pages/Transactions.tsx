@@ -62,11 +62,17 @@ export function Transactions(): JSX.Element {
   }
 
   // Spend / income per currency (summing across currencies is meaningless).
+  // Transfers are internal money movements (e.g. a bank paying off a credit
+  // card) — counting them would double-count the itemized card charges, so they
+  // are excluded from spend, income and net, exactly like the dashboard/insights
+  // do. Card "positives" are refunds, not income, so they're excluded too.
   const spendByCur = new Map<string, number>();
   const incomeByCur = new Map<string, number>();
+  let hasTransfers = false;
   for (const e of entries) {
+    if (e.category === 'Transfers') { hasTransfers = true; continue; }
     if (e.amount < 0) spendByCur.set(e.currency, (spendByCur.get(e.currency) ?? 0) + Math.abs(e.amount));
-    else incomeByCur.set(e.currency, (incomeByCur.get(e.currency) ?? 0) + e.amount);
+    else if (e.sourceType !== 'card') incomeByCur.set(e.currency, (incomeByCur.get(e.currency) ?? 0) + e.amount);
   }
   const spendParts = [...spendByCur.entries()].sort((a, b) => b[1] - a[1]).map(([c, v]) => formatMoney(v, c));
   const incomeParts = [...incomeByCur.entries()].sort((a, b) => b[1] - a[1]).map(([c, v]) => formatMoney(v, c));
@@ -190,6 +196,7 @@ export function Transactions(): JSX.Element {
               <div className="tnum text-2xl font-semibold text-ink leading-tight">
                 {spendParts.length ? spendParts.join(' · ') : formatMoney(0)}
               </div>
+              {hasTransfers && <div className="text-[10px] text-muted mt-0.5">excludes transfers</div>}
             </div>
             {incomeParts.length > 0 && (
               <div>
@@ -262,17 +269,18 @@ function CategoryGroups({
     }
     return [...map.entries()]
       .map(([key, list]) => {
-        // Spend per currency (for the header) + a magnitude for ordering.
-        const spend = new Map<string, number>();
+        // Signed net per currency (so an income/salary group reads as +, not 0),
+        // plus a magnitude for ordering biggest-first.
+        const net = new Map<string, number>();
         let magnitude = 0;
         for (const e of list) {
-          if (e.amount < 0) {
-            spend.set(e.currency, (spend.get(e.currency) ?? 0) + Math.abs(e.amount));
-            magnitude += Math.abs(e.amount);
-          }
+          net.set(e.currency, (net.get(e.currency) ?? 0) + e.amount);
+          magnitude += Math.abs(e.amount);
         }
-        const parts = [...spend.entries()].sort((a, b) => b[1] - a[1]).map(([c, v]) => formatMoney(v, c));
-        return { key, list, parts, magnitude, count: list.length };
+        const sorted = [...net.entries()].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+        const parts = sorted.map(([c, v]) => (v >= 0 ? `+${formatMoney(v, c)}` : formatMoney(Math.abs(v), c)));
+        const positive = (sorted[0]?.[1] ?? 0) > 0;
+        return { key, list, parts, magnitude, count: list.length, positive };
       })
       .sort((a, b) => b.magnitude - a.magnitude);
   }, [entries]);
@@ -304,7 +312,10 @@ function CategoryGroups({
               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
               <span className="font-medium">{g.key}</span>
               <span className="text-muted text-xs">{g.count}</span>
-              <span className="tnum ml-auto text-sm font-semibold whitespace-nowrap">
+              {g.key === 'Transfers' && (
+                <span className="text-[10px] text-muted border border-edge rounded-full px-1.5 py-0.5">not counted</span>
+              )}
+              <span className={`tnum ml-auto text-sm font-semibold whitespace-nowrap ${g.positive ? 'text-emerald-400' : ''}`}>
                 {g.parts.length ? g.parts.join(' · ') : formatMoney(0)}
               </span>
               <span className={`text-muted text-xs w-4 text-center transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
