@@ -126,7 +126,7 @@ export function Duplicates(): JSX.Element {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <Bidi className="font-medium">{a.merchant || '(unknown)'}</Bidi>
-                    <span className="text-lg font-semibold text-rose-400">{formatMoney(a.amount)}</span>
+                    <span className="tnum text-lg font-semibold text-rose-400">{formatMoney(a.amount)}</span>
                     <Badge tone="warn">{Math.round(a.similarity * 100)}% match</Badge>
                     {a.status !== 'open' && <Badge tone={a.status === 'confirmed' ? 'warn' : 'default'}>{a.status}</Badge>}
                   </div>

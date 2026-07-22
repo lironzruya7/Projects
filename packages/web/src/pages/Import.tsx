@@ -575,7 +575,7 @@ export function ImportPage(): JSX.Element {
             <div className="space-y-2">
               {dupGroups.map((g, i) => (
                 <div key={i} className="text-xs bg-panel2/40 rounded-lg p-2">
-                  <div className="text-muted mb-1">
+                  <div className="tnum text-muted mb-1">
                     {g[0]!.provider ?? 'card'}{g[0]!.accountLabel ? ` ••${g[0]!.accountLabel}` : ''}
                     {g[0]!.period ? ` · ${g[0]!.period}` : ''} · {g[0]!.rowCount} rows · {formatMoney(g[0]!.total)} · {g.length} copies
                   </div>

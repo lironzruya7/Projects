@@ -71,7 +71,7 @@ export default function App(): JSX.Element {
           <span className="text-xs text-muted">Finance</span>
         </header>
 
-        <div className="max-w-6xl mx-auto p-4 sm:p-6">
+        <div key={loc.pathname} className="rise-in max-w-6xl mx-auto p-4 sm:p-6">
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />

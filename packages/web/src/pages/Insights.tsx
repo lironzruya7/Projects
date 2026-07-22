@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Anomaly, RecommendationReport, RecurringItem } from '../api/client';
 import { api } from '../api/client';
-import { Bidi, Card, Spinner, StatCard } from '../components/ui';
+import { Bidi, Card, Skeleton, StatCard } from '../components/ui';
 import { categoryColor } from '../lib/colors';
 import { formatDate, formatMoney } from '../lib/format';
 
@@ -30,7 +30,7 @@ export function Insights(): JSX.Element {
     });
   }, []);
 
-  if (loading) return <Spinner label="Analyzing…" />;
+  if (loading) return <InsightsSkeleton />;
 
   const monthlyTotal = recurring.reduce((s, r) => s + r.monthlyCost, 0);
   const annualTotal = recurring.reduce((s, r) => s + r.annualCost, 0);
@@ -60,7 +60,7 @@ export function Insights(): JSX.Element {
                     </div>
                     {r.monthlySaving > 0 && (
                       <div className="text-right shrink-0">
-                        <div className="text-emerald-400 font-semibold text-sm">-{formatMoney(r.monthlySaving, cur)}</div>
+                        <div className="tnum text-emerald-400 font-semibold text-sm">-{formatMoney(r.monthlySaving, cur)}</div>
                         <div className="text-[10px] text-muted">/mo</div>
                       </div>
                     )}
@@ -89,7 +89,7 @@ export function Insights(): JSX.Element {
                           {c.category}
                           <span className="text-muted text-xs">· {c.pct.toFixed(0)}%</span>
                         </span>
-                        <span className="text-muted whitespace-nowrap">{formatMoney(c.monthlyAvg, cur)}/mo</span>
+                        <span className="tnum text-muted whitespace-nowrap">{formatMoney(c.monthlyAvg, cur)}/mo</span>
                       </div>
                       <div className="h-2 bg-panel2 rounded-full overflow-hidden">
                         <div className="h-full rounded-full" style={{ width: `${(c.monthlyAvg / max) * 100}%`, background: color }} />
@@ -110,7 +110,7 @@ export function Insights(): JSX.Element {
                   <div key={g.key} className="rounded-xl border border-edge bg-panel2/30 p-3">
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-medium">{g.label} <span className="text-muted text-xs">· {g.merchants.length}</span></span>
-                      <span className="text-sm font-semibold">{formatMoney(g.monthlyCost, cur)}<span className="text-muted text-xs">/mo</span></span>
+                      <span className="tnum text-sm font-semibold">{formatMoney(g.monthlyCost, cur)}<span className="text-muted text-xs">/mo</span></span>
                     </div>
                     <div className="space-y-1">
                       {g.merchants.map((m) => (
@@ -120,7 +120,7 @@ export function Insights(): JSX.Element {
                           className="w-full flex items-center justify-between gap-2 text-xs"
                         >
                           <Bidi className="truncate text-muted">{m.merchant}</Bidi>
-                          <span className="whitespace-nowrap">{formatMoney(m.monthlyCost, cur)}/mo · {m.count} charge{m.count === 1 ? '' : 's'}</span>
+                          <span className="tnum whitespace-nowrap">{formatMoney(m.monthlyCost, cur)}/mo · {m.count} charge{m.count === 1 ? '' : 's'}</span>
                         </button>
                       ))}
                     </div>
@@ -167,8 +167,8 @@ export function Insights(): JSX.Element {
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="font-semibold">{formatMoney(r.monthlyCost, r.currency)}<span className="text-muted text-xs">/mo</span></div>
-                    <div className="text-xs text-muted">{formatMoney(r.annualCost, r.currency)}/yr</div>
+                    <div className="tnum font-semibold">{formatMoney(r.monthlyCost, r.currency)}<span className="text-muted text-xs">/mo</span></div>
+                    <div className="tnum text-xs text-muted">{formatMoney(r.annualCost, r.currency)}/yr</div>
                   </div>
                 </button>
               );
@@ -202,8 +202,8 @@ export function Insights(): JSX.Element {
                     <div className="text-xs text-muted mt-0.5 rtl-aware" dir="auto">{a.detail}</div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="font-semibold">{formatMoney(a.amount)}</div>
-                    <div className="text-xs text-muted">{formatDate(a.date)}</div>
+                    <div className="tnum font-semibold">{formatMoney(a.amount)}</div>
+                    <div className="tnum text-xs text-muted">{formatDate(a.date)}</div>
                   </div>
                 </button>
               );
@@ -211,6 +211,21 @@ export function Insights(): JSX.Element {
           </div>
         )}
       </Card>
+    </div>
+  );
+}
+
+/** Shaped placeholder shown while insights are computed. */
+function InsightsSkeleton(): JSX.Element {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-8 w-64 hidden md:block" />
+      <div className="grid grid-cols-2 gap-3">
+        <Skeleton className="h-24 rounded-2xl" />
+        <Skeleton className="h-24 rounded-2xl" />
+      </div>
+      <Skeleton className="h-40 rounded-xl" />
+      <Skeleton className="h-56 rounded-xl" />
     </div>
   );
 }

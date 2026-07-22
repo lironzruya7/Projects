@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import type { Account, Category, LedgerEntry } from '../api/client';
 import { api } from '../api/client';
 import { TransactionTable } from '../components/TransactionTable';
-import { Button, Card, Spinner } from '../components/ui';
+import { Button, Card, Skeleton } from '../components/ui';
 import { accountLabel } from '../lib/accounts';
 import { formatMoney } from '../lib/format';
 
@@ -70,7 +70,7 @@ export function Transactions(): JSX.Element {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="hidden md:block text-2xl font-semibold">Transactions</h1>
-        <div className="text-xs sm:text-sm text-muted">
+        <div className="tnum text-xs sm:text-sm text-muted">
           {entries.length} entries · spend {spendParts.length ? spendParts.join(' · ') : formatMoney(0)}
         </div>
       </div>
@@ -173,10 +173,28 @@ export function Transactions(): JSX.Element {
       </Card>
 
       <Card>
-        {loading ? <Spinner label="Loading transactions…" /> : (
+        {loading ? <LedgerSkeleton /> : (
           <TransactionTable entries={entries} categories={categories} onChanged={load} />
         )}
       </Card>
+    </div>
+  );
+}
+
+/** Placeholder rows shaped like ledger entries while the list loads. */
+function LedgerSkeleton(): JSX.Element {
+  return (
+    <div className="divide-y divide-edge/40">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="flex items-start gap-3 py-2.5">
+          <Skeleton className="w-1.5 h-9 rounded-full shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0 space-y-2">
+            <Skeleton className="h-4 w-1/2" />
+            <Skeleton className="h-3 w-1/3" />
+          </div>
+          <Skeleton className="h-4 w-16" />
+        </div>
+      ))}
     </div>
   );
 }
