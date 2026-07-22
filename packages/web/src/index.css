@@ -22,17 +22,17 @@
 
   /* Surfaces + text (light) — soft, low-glare: off-white cards on a muted gray
      page instead of pure white on white. */
-  --surface: 235 239 244; /* page background  (soft cool gray) */
-  --panel: 251 252 254; /* cards            (near-white, not glaring) */
-  --panel2: 238 242 247; /* insets/fills */
-  --edge: 220 225 233; /* borders/dividers */
+  --surface: 228 233 240; /* page background  (soft cool gray, a touch deeper so cards stand out) */
+  --panel: 253 254 255; /* cards            (near-white, not glaring) */
+  --panel2: 237 241 246; /* insets/fills */
+  --edge: 206 214 226; /* borders/dividers (more visible frame) */
   --ink: 30 41 59; /* primary text     (slate-800, softer than pure black) */
   --muted: 100 116 139; /* secondary text   (slate-500) */
   --brand: 2 132 199; /* accent           (sky-600)   */
   --brand-ink: 255 255 255; /* text/icon that sits on --brand */
 
   /* App background wash + scrollbar */
-  --app-bg: radial-gradient(1200px 600px at 100% -10%, #e6ecf5 0%, #edf0f4 55%);
+  --app-bg: radial-gradient(1200px 600px at 100% -10%, #e7edf6 0%, #e4e9f0 55%);
   --scrollbar: 203 213 225; /* slate-300 */
 
   /* Chart colors that must adapt to the surface */
@@ -47,24 +47,24 @@
 
   /* Elevation + focus */
   --ring: 2 132 199; /* brand, as rgb channels for alpha use */
-  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px -14px rgb(15 23 42 / 0.18);
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.08), 0 6px 18px -10px rgb(15 23 42 / 0.22);
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* Dark — lifted off pure black: a lighter slate so it reads as dark, not void. */
-  --surface: 23 31 49; /* page background (lighter than slate-900) */
-  --panel: 34 45 66; /* cards */
-  --panel2: 44 57 80;
-  --edge: 58 74 97;
+  /* Dark — lifted off pure black; cards a clear step above the page. */
+  --surface: 20 27 44; /* page background */
+  --panel: 40 53 76; /* cards — noticeably lighter than the page */
+  --panel2: 51 66 92;
+  --edge: 71 90 118; /* more visible frame */
   --ink: 226 232 240; /* slate-200 */
   --muted: 148 163 184; /* slate-400 */
   --brand: 56 189 248; /* sky-400 */
   --brand-ink: 15 23 42; /* dark text on the light-ish accent */
 
-  --app-bg: radial-gradient(1200px 600px at 100% -10%, #202d49 0%, #171f33 55%);
-  --scrollbar: 58 74 97;
+  --app-bg: radial-gradient(1200px 600px at 100% -10%, #1b2740 0%, #141b2c 55%);
+  --scrollbar: 71 90 118;
 
   --chart-axis: #7c8ba3;
   --chart-grid: #2b384e;

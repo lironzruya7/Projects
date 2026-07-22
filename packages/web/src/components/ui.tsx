@@ -22,7 +22,7 @@ export function Card({
   style?: CSSProperties;
 }): JSX.Element {
   return (
-    <div className={`bg-panel border border-edge rounded-xl p-4 ${className}`} onClick={onClick} style={style}>
+    <div className={`bg-panel border border-edge rounded-xl p-4 shadow-[var(--shadow-card)] ${className}`} onClick={onClick} style={style}>
       {children}
     </div>
   );
@@ -54,14 +54,17 @@ export function StatCard({
     accent === 'up' ? 'text-rose-400' : accent === 'down' ? 'text-emerald-400' : 'text-ink';
   return (
     <div
-      className={`relative overflow-hidden bg-panel border border-edge rounded-2xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.3)] ${
-        onClick ? 'cursor-pointer active:scale-[0.98] hover:border-brand hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.6)] transition-all' : ''
+      className={`relative overflow-hidden bg-panel border border-edge rounded-2xl p-4 shadow-[var(--shadow-card)] ${
+        onClick ? 'cursor-pointer active:scale-[0.98] hover:border-brand hover:shadow-[0_12px_28px_-12px_rgba(0,0,0,0.5)] transition-all' : ''
       }`}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
-      style={{ background: `linear-gradient(135deg, ${tint}14, transparent 60%)` }}
+      // Solid panel fill (from bg-panel) with the accent tint layered ON TOP, so
+      // the tile keeps a surface distinct from the page instead of being a faint
+      // transparent wash.
+      style={{ backgroundImage: `linear-gradient(135deg, ${tint}24, transparent 62%)` }}
     >
       <div className="absolute left-0 top-0 h-full w-1" style={{ background: tint }} />
       <div className="flex items-center justify-between">
