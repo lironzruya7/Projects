@@ -1,0 +1,95 @@
+# sec-toolbox:latest — security-analysis toolbox image.
+#
+# Build:
+#   docker build -t sec-toolbox:latest -f docker/Dockerfile.sec-toolbox docker/
+#
+# The container runs as a NON-root user (`runner`). It carries a broad set of
+# recon / analysis / forensics tools. Heavier tools (Volatility3, Ghidra) are
+# intentionally left out — put those in a separate, larger optional image.
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8 \
+    PATH="/opt/tools/bin:${PATH}"
+
+# ---------------------------------------------------------------------------
+# Distro packages
+# ---------------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        wget \
+        git \
+        bash \
+        jq \
+        # recon / network
+        nmap \
+        masscan \
+        whois \
+        dnsutils \
+        nikto \
+        # tls / capture
+        tshark \
+        # binary / malware / forensics
+        binwalk \
+        yara \
+        radare2 \
+        libimage-exiftool-perl \
+        # python + build helpers for pip tools
+        python3 \
+        python3-pip \
+        python3-venv \
+        sqlmap \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# Go-based tools: ffuf + nuclei (fetched as static release binaries)
+# ---------------------------------------------------------------------------
+ARG TARGETARCH=amd64
+ARG FFUF_VERSION=2.1.0
+ARG NUCLEI_VERSION=3.3.7
+
+RUN set -eux; \
+    mkdir -p /opt/tools/bin; \
+    # ffuf
+    curl -fsSL -o /tmp/ffuf.tar.gz \
+        "https://github.com/ffuf/ffuf/releases/download/v${FFUF_VERSION}/ffuf_${FFUF_VERSION}_linux_${TARGETARCH}.tar.gz"; \
+    tar -xzf /tmp/ffuf.tar.gz -C /opt/tools/bin ffuf; \
+    # nuclei
+    curl -fsSL -o /tmp/nuclei.zip \
+        "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${TARGETARCH}.zip"; \
+    (cd /tmp && python3 -c "import zipfile,sys; zipfile.ZipFile('nuclei.zip').extract('nuclei','/opt/tools/bin')"); \
+    chmod +x /opt/tools/bin/ffuf /opt/tools/bin/nuclei; \
+    rm -f /tmp/ffuf.tar.gz /tmp/nuclei.zip
+
+# ---------------------------------------------------------------------------
+# testssl.sh (shell script, pinned tag)
+# ---------------------------------------------------------------------------
+ARG TESTSSL_VERSION=3.2
+RUN set -eux; \
+    git clone --depth 1 --branch "v${TESTSSL_VERSION}" \
+        https://github.com/drwetter/testssl.sh.git /opt/testssl; \
+    ln -s /opt/testssl/testssl.sh /opt/tools/bin/testssl.sh
+
+# ---------------------------------------------------------------------------
+# Python-based tools: requests, oletools, pdfid/pdf-parser (via pdfid pkg)
+# ---------------------------------------------------------------------------
+RUN set -eux; \
+    pip3 install --no-cache-dir --break-system-packages \
+        requests \
+        oletools \
+        pdfid \
+        pdf-parser
+
+# ---------------------------------------------------------------------------
+# Non-root runtime user. /work is the mount point for the throwaway workdir.
+# ---------------------------------------------------------------------------
+RUN useradd --create-home --uid 1000 --shell /bin/bash runner \
+    && mkdir -p /work \
+    && chown runner:runner /work
+
+USER runner
+WORKDIR /work
+
+# Default to an interactive-ish shell; the exec agent overrides the command.
+CMD ["bash"]
