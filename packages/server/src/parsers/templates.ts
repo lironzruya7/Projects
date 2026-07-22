@@ -7,10 +7,11 @@ import type { AmountMode, ColumnMapping } from '../models/types.js';
  */
 const KEYWORDS = {
   date: ['תאריך עסקה', 'תאריך רכישה', 'תאריך חיוב', 'תאריך ערך', 'תאריך', 'מועד', 'date', 'transaction date'],
-  amount: ['סכום חיוב', 'סכום העסקה', 'סכום עסקה', 'סכום בש"ח', 'סכום בשח', 'סכום', 'amount', 'sum', 'charge'],
+  // 'gross'/'net' cover PayPal's transaction CSV export.
+  amount: ['סכום חיוב', 'סכום העסקה', 'סכום עסקה', 'סכום בש"ח', 'סכום בשח', 'סכום', 'amount', 'gross', 'net', 'sum', 'charge'],
   debit: ['חובה', 'חיוב', 'debit'],
   credit: ['זכות', 'credit'],
-  merchant: ['שם בית העסק', 'שם בית עסק', 'בית העסק', 'בית עסק', 'שם העסק', 'merchant', 'business', 'payee'],
+  merchant: ['שם בית העסק', 'שם בית עסק', 'בית העסק', 'בית עסק', 'שם העסק', 'merchant', 'business', 'payee', 'name', 'counterparty'],
   description: ['תיאור פעולה', 'תיאור', 'פרטים', 'פירוט', 'פירוט נוסף', 'הערות', 'description', 'details', 'memo'],
   // The currency of the *charged* amount ("סכום חיוב"). This is what we import.
   chargeCurrency: ['מטבע חיוב', 'מטבע לחיוב', 'charge currency'],
@@ -20,7 +21,7 @@ const KEYWORDS = {
   currency: ['מטבע עסקה', 'מטבע', 'currency'],
   type: ['סוג עסקה', 'סוג', 'type'],
   balance: ['יתרה', 'balance'],
-  reference: ['מספר זיהוי עיסקה', 'מספר זיהוי עסקה', 'מס שובר', 'שובר', 'אסמכתא', 'מספר עסקה', 'מס עסקה', 'reference', 'ref'],
+  reference: ['מספר זיהוי עיסקה', 'מספר זיהוי עסקה', 'מס שובר', 'שובר', 'אסמכתא', 'מספר עסקה', 'מס עסקה', 'transaction id', 'txn id', 'reference', 'ref'],
 } as const;
 
 export interface ProviderTemplate {
