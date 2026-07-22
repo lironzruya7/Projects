@@ -88,6 +88,7 @@ Request:
 | `network` | `"none"` \| `"egress"` | **Default `none`** (isolated detonation). `egress` = bridge networking |
 | `timeout` | int | Seconds, `5..600`. Container is killed on overrun |
 | `files` | array (optional) | `{name, b64}`; base64-decoded into `/work`. `name` must be a plain basename |
+| `raw` | bool (optional) | **Default `false`**. When `true` **and** `network == "egress"`, adds **only** `--cap-add NET_RAW` (for `nmap -sS`, `masscan`, etc.). Ignored under `network: "none"`. No other capability is ever added |
 
 Response:
 
@@ -114,7 +115,10 @@ Response:
 Every container runs with:
 
 - `--network none` **by default** (only `bridge` when `network: "egress"`).
-- `--cap-drop ALL` and `--security-opt no-new-privileges`.
+- `--cap-drop ALL` and `--security-opt no-new-privileges`. The **only**
+  capability that can be added back is `NET_RAW`, and only when the caller
+  explicitly sets `raw: true` together with `network: "egress"` — never
+  otherwise.
 - `--pids-limit 512 --memory 2g --cpus 2`.
 - `--user runner` (**non-root** inside the container).
 - Only the **throwaway workdir** is mounted (`-v <workdir>:/work:rw`). No other

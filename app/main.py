@@ -86,6 +86,11 @@ class ExecRequest(BaseModel):
     network: Literal["none", "egress"] = "none"
     timeout: int = Field(60, ge=5, le=600)
     files: Optional[List[InputFile]] = None
+    # Opt-in raw sockets (e.g. nmap -sS, masscan). ONLY honored when
+    # network == "egress"; ignored under "none" (raw sockets are meaningless
+    # without a network). When honored, adds *only* CAP_NET_RAW on top of the
+    # default --cap-drop ALL — no other capability.
+    raw: bool = False
 
 
 class ExecResponse(BaseModel):
@@ -173,11 +178,21 @@ def run_command(req: ExecRequest) -> ExecResponse:
 
         # 2) Assemble the hardened `docker run` invocation.
         network = "none" if req.network == "none" else "bridge"
+
+        # Raw sockets: only when explicitly requested AND egress is on. Under
+        # --network none there is nothing to send raw packets over, so raw is
+        # silently ignored there. When granted, add ONLY CAP_NET_RAW.
+        raw_granted = req.raw and req.network == "egress"
+
         argv = [
             DOCKER_BIN, "run", "--rm",
             "--name", container_name,
             "--network", network,
             "--cap-drop", "ALL",
+        ]
+        if raw_granted:
+            argv += ["--cap-add", "NET_RAW"]
+        argv += [
             "--security-opt", "no-new-privileges",
             "--pids-limit", PIDS_LIMIT,
             "--memory", MEMORY_LIMIT,
@@ -190,8 +205,9 @@ def run_command(req: ExecRequest) -> ExecResponse:
         ]
 
         log.info(
-            "exec network=%s timeout=%ds files=%d cmd=%r",
-            req.network, req.timeout, len(req.files or []), req.command,
+            "exec network=%s raw=%s(granted=%s) timeout=%ds files=%d cmd=%r",
+            req.network, req.raw, raw_granted, req.timeout,
+            len(req.files or []), req.command,
         )
 
         proc = subprocess.Popen(
