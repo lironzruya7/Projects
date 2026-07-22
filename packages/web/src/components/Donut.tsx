@@ -85,7 +85,7 @@ export function Donut({
           {centerLabel}
           {pct != null && <span className="text-brand"> · {pct}%</span>}
         </div>
-        <div className="text-xl font-semibold">{formatMoney(centerValue, currency)}</div>
+        <div className="tnum text-xl font-semibold">{formatMoney(centerValue, currency)}</div>
       </div>
     </div>
   );

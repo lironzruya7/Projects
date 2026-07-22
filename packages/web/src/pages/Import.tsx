@@ -664,7 +664,7 @@ export function ImportPage(): JSX.Element {
                   {b.source_type === 'card' && (
                     <input
                       type="month"
-                      style={{ colorScheme: 'dark' }}
+
                       className="input !py-0.5 !px-1 text-xs w-28"
                       title="Billing month of this file"
                       defaultValue={b.period ?? ''}

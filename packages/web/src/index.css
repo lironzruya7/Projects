@@ -13,18 +13,66 @@
   }
 }
 
+/* ---- Theme variables -------------------------------------------------------
+   Light is the default; [data-theme="dark"] on <html> swaps to the dark set.
+   Surface/text tokens are raw "R G B" channels (consumed by Tailwind via
+   rgb(var(--x) / <alpha>)); accent/status tokens are full colors. --------- */
 :root {
+  color-scheme: light;
+
+  /* Surfaces + text (light) */
+  --surface: 248 250 252; /* page background  (slate-50) */
+  --panel: 255 255 255; /* cards            (white)    */
+  --panel2: 241 245 249; /* insets/fills     (slate-100) */
+  --edge: 226 232 240; /* borders/dividers (slate-200) */
+  --ink: 15 23 42; /* primary text     (slate-900) */
+  --muted: 100 116 139; /* secondary text   (slate-500) */
+  --brand: 2 132 199; /* accent           (sky-600)   */
+  --brand-ink: 255 255 255; /* text/icon that sits on --brand */
+
+  /* App background wash + scrollbar */
+  --app-bg: radial-gradient(1200px 600px at 100% -10%, #e0f2fe 0%, #f8fafc 55%);
+  --scrollbar: 203 213 225; /* slate-300 */
+
+  /* Chart colors that must adapt to the surface */
+  --chart-axis: #64748b; /* slate-500 tick labels */
+  --chart-grid: #e2e8f0; /* slate-200 gridlines   */
+
+  /* Semantic status tokens — one source of truth for money/status colors. */
+  --income: #059669; /* money in  (emerald-600, readable on white) */
+  --expense: #e11d48; /* money out (rose-600) */
+  --warning: #d97706;
+  --info: #0284c7;
+
+  /* Elevation + focus */
+  --ring: 2 132 199; /* brand, as rgb channels for alpha use */
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px -14px rgb(15 23 42 / 0.18);
+}
+
+:root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* Semantic tokens — one source of truth for money/status colors, so charts,
-     numbers and chips all read consistently. */
-  --income: #34d399; /* money in  */
-  --expense: #fb7185; /* money out (attention, not alarm) */
+  --surface: 15 23 42; /* slate-900 */
+  --panel: 30 41 59; /* slate-800 */
+  --panel2: 36 52 73;
+  --edge: 51 65 85; /* slate-700 */
+  --ink: 226 232 240; /* slate-200 */
+  --muted: 148 163 184; /* slate-400 */
+  --brand: 56 189 248; /* sky-400 */
+  --brand-ink: 15 23 42; /* dark text on the light-ish accent */
+
+  --app-bg: radial-gradient(1200px 600px at 100% -10%, #172033 0%, #0f172a 55%);
+  --scrollbar: 51 65 85;
+
+  --chart-axis: #64748b;
+  --chart-grid: #1e293b;
+
+  --income: #34d399;
+  --expense: #fb7185;
   --warning: #fbbf24;
   --info: #38bdf8;
 
-  /* Elevation + focus */
-  --ring: 56 189 248; /* brand, as rgb channels for alpha use */
+  --ring: 56 189 248;
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.5);
 }
 
@@ -103,11 +151,12 @@ body,
 
 body {
   margin: 0;
-  background: radial-gradient(1200px 600px at 100% -10%, #172033 0%, #0f172a 55%);
+  background: var(--app-bg);
   background-attachment: fixed;
-  color: #e2e8f0;
+  color: rgb(var(--ink));
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans Hebrew', sans-serif;
   -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* Recharts focus outlines on tap look bad on mobile */
@@ -128,6 +177,6 @@ body {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: rgb(var(--scrollbar));
   border-radius: 6px;
 }

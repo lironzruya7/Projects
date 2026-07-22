@@ -292,7 +292,7 @@ export function Settings(): JSX.Element {
           transaction. The <b>Markdown</b> version is ideal to hand to another AI for analysis; <b>PDF</b> is the tidy printable one.
         </p>
         <div className="flex flex-wrap gap-2">
-          <a href="/api/export/report.pdf" target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm bg-brand text-white hover:opacity-90">📄 Report PDF</a>
+          <a href="/api/export/report.pdf" target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm bg-brand text-brandink hover:opacity-90">📄 Report PDF</a>
           <a href="/api/export/report.md" className="px-3 py-1.5 rounded-lg text-sm bg-panel2 hover:bg-edge">🤖 For AI (Markdown)</a>
           <a href="/api/export/json" className="px-3 py-1.5 rounded-lg text-sm bg-panel2 hover:bg-edge">🤖 For AI (JSON)</a>
           <a href="/api/export/report.html" target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg text-sm bg-panel2 hover:bg-edge">🌐 HTML</a>

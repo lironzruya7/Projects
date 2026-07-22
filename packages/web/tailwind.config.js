@@ -4,13 +4,18 @@ export default {
   theme: {
     extend: {
       colors: {
-        surface: '#0f172a',
-        panel: '#1e293b',
-        panel2: '#243449',
-        edge: '#334155',
-        ink: '#e2e8f0',
-        muted: '#94a3b8',
-        brand: '#38bdf8',
+        // Semantic surface/text tokens driven by CSS variables, so the whole app
+        // re-themes (light ⇄ dark) by swapping the variable set on <html>. Stored
+        // as raw "R G B" channels so Tailwind's /alpha syntax keeps working
+        // (e.g. bg-panel/50, bg-surface/90).
+        surface: 'rgb(var(--surface) / <alpha-value>)',
+        panel: 'rgb(var(--panel) / <alpha-value>)',
+        panel2: 'rgb(var(--panel2) / <alpha-value>)',
+        edge: 'rgb(var(--edge) / <alpha-value>)',
+        ink: 'rgb(var(--ink) / <alpha-value>)',
+        muted: 'rgb(var(--muted) / <alpha-value>)',
+        brand: 'rgb(var(--brand) / <alpha-value>)',
+        brandink: 'rgb(var(--brand-ink) / <alpha-value>)',
       },
     },
   },

@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import type { Account, Category, LedgerEntry } from '../api/client';
+import type { Category, Account, LedgerEntry } from '../api/client';
 import { api } from '../api/client';
 import { TransactionTable } from '../components/TransactionTable';
 import { Button, Card, Skeleton } from '../components/ui';
 import { accountLabel } from '../lib/accounts';
+import { categoryColor } from '../lib/colors';
 import { formatMoney } from '../lib/format';
 
 export function Transactions(): JSX.Element {
@@ -15,6 +16,9 @@ export function Transactions(): JSX.Element {
   const [currencies, setCurrencies] = useState<Array<{ currency: string; count: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(params.get('search') ?? '');
+  // Default to grouping the ledger by category (collapsible) so it's a tidy
+  // summary you expand on demand, not one endless flat list.
+  const [groupBy, setGroupBy] = useState<'category' | 'date'>('category');
 
   const filters = {
     category: params.get('category') ?? undefined,
@@ -153,7 +157,7 @@ export function Transactions(): JSX.Element {
             from
             <input
               type="date"
-              style={{ colorScheme: 'dark' }}
+
               className="bg-panel2 border border-edge rounded-lg px-2 py-1.5 text-sm text-ink"
               value={filters.from ?? ''}
               onChange={(e) => setFilter('from', e.target.value || undefined)}
@@ -163,7 +167,7 @@ export function Transactions(): JSX.Element {
             to
             <input
               type="date"
-              style={{ colorScheme: 'dark' }}
+
               className="bg-panel2 border border-edge rounded-lg px-2 py-1.5 text-sm text-ink"
               value={filters.to ?? ''}
               onChange={(e) => setFilter('to', e.target.value || undefined)}
@@ -206,11 +210,113 @@ export function Transactions(): JSX.Element {
         </Card>
       )}
 
+      {/* View switch: grouped-by-category (default) vs a flat date-sorted list. */}
+      {!loading && entries.length > 0 && (
+        <div className="flex items-center gap-1 text-sm">
+          <span className="text-xs text-muted mr-1">View:</span>
+          <button
+            onClick={() => setGroupBy('category')}
+            className={`px-3 py-1 rounded-full border transition-colors ${groupBy === 'category' ? 'border-brand text-brand bg-brand/10' : 'border-edge text-muted'}`}
+          >
+            By category
+          </button>
+          <button
+            onClick={() => setGroupBy('date')}
+            className={`px-3 py-1 rounded-full border transition-colors ${groupBy === 'date' ? 'border-brand text-brand bg-brand/10' : 'border-edge text-muted'}`}
+          >
+            By date
+          </button>
+        </div>
+      )}
+
       <Card>
-        {loading ? <LedgerSkeleton /> : (
+        {loading ? (
+          <LedgerSkeleton />
+        ) : groupBy === 'category' ? (
+          <CategoryGroups entries={entries} categories={categories} onChanged={load} />
+        ) : (
           <TransactionTable entries={entries} categories={categories} onChanged={load} />
         )}
       </Card>
+    </div>
+  );
+}
+
+/** Collapsible category sections, biggest spend first. Each header shows the
+ *  category, its share, and its total; expand to see that category's entries. */
+function CategoryGroups({
+  entries,
+  categories,
+  onChanged,
+}: {
+  entries: LedgerEntry[];
+  categories: Category[];
+  onChanged: () => void;
+}): JSX.Element {
+  const groups = useMemo(() => {
+    const map = new Map<string, LedgerEntry[]>();
+    for (const e of entries) {
+      const key = e.category ?? 'Uncategorized';
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(e);
+    }
+    return [...map.entries()]
+      .map(([key, list]) => {
+        // Spend per currency (for the header) + a magnitude for ordering.
+        const spend = new Map<string, number>();
+        let magnitude = 0;
+        for (const e of list) {
+          if (e.amount < 0) {
+            spend.set(e.currency, (spend.get(e.currency) ?? 0) + Math.abs(e.amount));
+            magnitude += Math.abs(e.amount);
+          }
+        }
+        const parts = [...spend.entries()].sort((a, b) => b[1] - a[1]).map(([c, v]) => formatMoney(v, c));
+        return { key, list, parts, magnitude, count: list.length };
+      })
+      .sort((a, b) => b.magnitude - a.magnitude);
+  }, [entries]);
+
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const toggle = (key: string): void =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+
+  if (entries.length === 0) {
+    return <div className="text-muted text-sm py-8 text-center">No transactions match.</div>;
+  }
+
+  return (
+    <div className="divide-y divide-edge/40">
+      {groups.map((g) => {
+        const isOpen = open.has(g.key);
+        const color = categoryColor(g.key);
+        return (
+          <div key={g.key}>
+            <button
+              onClick={() => toggle(g.key)}
+              className="w-full flex items-center gap-3 py-3 text-left active:scale-[0.997] transition-transform"
+              aria-expanded={isOpen}
+            >
+              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+              <span className="font-medium">{g.key}</span>
+              <span className="text-muted text-xs">{g.count}</span>
+              <span className="tnum ml-auto text-sm font-semibold whitespace-nowrap">
+                {g.parts.length ? g.parts.join(' · ') : formatMoney(0)}
+              </span>
+              <span className={`text-muted text-xs w-4 text-center transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+            </button>
+            {isOpen && (
+              <div className="pb-2">
+                <TransactionTable entries={g.list} categories={categories} onChanged={onChanged} />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

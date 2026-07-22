@@ -20,13 +20,41 @@ import { categoryColor } from '../lib/colors';
 import { accountColor, accountLabel } from '../lib/accounts';
 import { addMonths, currencySymbol, formatMoney, formatMonth, formatMonthLong } from '../lib/format';
 
-const TOOLTIP_STYLE = { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, color: '#e2e8f0' };
+// CSS variables resolve against the themed DOM, so the tooltip re-themes for free.
+const TOOLTIP_STYLE = {
+  background: 'rgb(var(--panel))',
+  border: '1px solid rgb(var(--edge))',
+  borderRadius: 10,
+  color: 'rgb(var(--ink))',
+};
+
+/** Read theme-dependent chart colors (axis ticks, gridlines) from CSS variables.
+ *  Recharts takes these as SVG stroke props, which don't resolve var(), so we
+ *  read the computed values and recompute when the theme attribute flips. */
+function useChartColors(): { axis: string; grid: string } {
+  const read = (): { axis: string; grid: string } => {
+    if (typeof window === 'undefined') return { axis: '#64748b', grid: '#e2e8f0' };
+    const s = getComputedStyle(document.documentElement);
+    return {
+      axis: s.getPropertyValue('--chart-axis').trim() || '#64748b',
+      grid: s.getPropertyValue('--chart-grid').trim() || '#e2e8f0',
+    };
+  };
+  const [colors, setColors] = useState(read);
+  useEffect(() => {
+    const obs = new MutationObserver(() => setColors(read()));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return colors;
+}
 
 export function Dashboard(): JSX.Element {
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [month, setMonth] = useState<string | undefined>(undefined);
   const [curFilter, setCurFilter] = useState<string | undefined>(undefined);
+  const chart = useChartColors();
   const nav = useNavigate();
 
   useEffect(() => {
@@ -123,7 +151,7 @@ export function Dashboard(): JSX.Element {
           <div className="flex items-center justify-center gap-2">
             <button
               onClick={() => nav('/import')}
-              className="bg-brand text-slate-900 font-medium px-4 py-2 rounded-lg text-sm active:scale-[0.97] transition-transform"
+              className="bg-brand text-brandink font-medium px-4 py-2 rounded-lg text-sm active:scale-[0.97] transition-transform"
             >
               Import a statement
             </button>
@@ -294,9 +322,9 @@ export function Dashboard(): JSX.Element {
                 <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-            <XAxis dataKey="month" tickFormatter={formatMonth} stroke="#64748b" fontSize={11} tickMargin={6} />
-            <YAxis stroke="#64748b" fontSize={11} width={52} tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} vertical={false} />
+            <XAxis dataKey="month" tickFormatter={formatMonth} stroke={chart.axis} fontSize={11} tickMargin={6} />
+            <YAxis stroke={chart.axis} fontSize={11} width={52} tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
             <Tooltip labelFormatter={formatMonth} formatter={(v: number) => formatMoney(v, currency)} contentStyle={TOOLTIP_STYLE} />
             <Area type="monotone" dataKey="expense" stroke="#38bdf8" strokeWidth={2} fill="url(#spend)" />
           </AreaChart>
@@ -308,9 +336,9 @@ export function Dashboard(): JSX.Element {
         <h3 className="font-medium mb-3">Cash flow</h3>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={data.cashFlow} margin={{ left: -18, right: 6, top: 4 }} barGap={2}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-            <XAxis dataKey="month" tickFormatter={formatMonth} stroke="#64748b" fontSize={11} tickMargin={6} />
-            <YAxis stroke="#64748b" fontSize={11} width={52} tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
+            <CartesianGrid strokeDasharray="3 3" stroke={chart.grid} vertical={false} />
+            <XAxis dataKey="month" tickFormatter={formatMonth} stroke={chart.axis} fontSize={11} tickMargin={6} />
+            <YAxis stroke={chart.axis} fontSize={11} width={52} tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)} />
             <Tooltip labelFormatter={formatMonth} formatter={(v: number) => formatMoney(v, currency)} contentStyle={TOOLTIP_STYLE} />
             <Bar dataKey="income" fill="#34d399" radius={[3, 3, 0, 0]} />
             <Bar dataKey="expense" fill="#fb7185" radius={[3, 3, 0, 0]} />

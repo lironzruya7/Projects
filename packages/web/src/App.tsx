@@ -1,4 +1,5 @@
 import { NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { useTheme } from './lib/theme';
 import { Dashboard } from './pages/Dashboard';
 import { ImportPage } from './pages/Import';
 import { Transactions } from './pages/Transactions';
@@ -33,6 +34,22 @@ const TITLES: Record<string, string> = {
   '/settings': 'Settings',
 };
 
+/** Sun/moon button that flips light ⇄ dark. */
+function ThemeToggle({ className = '' }: { className?: string }): JSX.Element {
+  const [theme, setTheme] = useTheme();
+  const next = theme === 'dark' ? 'light' : 'dark';
+  return (
+    <button
+      onClick={() => setTheme(next)}
+      className={`flex items-center justify-center w-9 h-9 rounded-lg text-lg text-muted hover:text-ink hover:bg-panel2 transition-colors ${className}`}
+      title={`Switch to ${next} mode`}
+      aria-label={`Switch to ${next} mode`}
+    >
+      {theme === 'dark' ? '☀️' : '🌙'}
+    </button>
+  );
+}
+
 export default function App(): JSX.Element {
   const loc = useLocation();
   const title = TITLES[loc.pathname] ?? 'Finance';
@@ -61,14 +78,20 @@ export default function App(): JSX.Element {
             </NavLink>
           ))}
         </nav>
-        <div className="p-4 text-xs text-muted border-t border-edge">All data stays on your machine.</div>
+        <div className="p-3 border-t border-edge flex items-center justify-between gap-2">
+          <span className="text-xs text-muted">All data stays on your machine.</span>
+          <ThemeToggle />
+        </div>
       </aside>
 
       <main className="flex-1 min-w-0 overflow-x-hidden pb-24 md:pb-0">
         {/* Mobile top header */}
         <header className="md:hidden sticky top-0 z-30 flex items-center justify-between px-4 h-14 bg-surface/90 backdrop-blur border-b border-edge">
           <span className="text-lg font-semibold">{title}</span>
-          <span className="text-xs text-muted">Finance</span>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-muted">Finance</span>
+            <ThemeToggle className="w-8 h-8 text-base" />
+          </div>
         </header>
 
         <div key={loc.pathname} className="rise-in max-w-6xl mx-auto p-4 sm:p-6">

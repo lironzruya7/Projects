@@ -102,7 +102,7 @@ export function Button({
   className?: string;
 }): JSX.Element {
   const variants: Record<string, string> = {
-    primary: 'bg-brand text-slate-900 hover:bg-sky-300 font-medium',
+    primary: 'bg-brand text-brandink hover:opacity-90 font-medium',
     ghost: 'bg-transparent border border-edge text-ink hover:border-brand',
     subtle: 'bg-panel2 text-ink hover:bg-edge',
     danger: 'bg-rose-600 text-white hover:bg-rose-500',
