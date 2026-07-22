@@ -58,7 +58,12 @@ dns_args() { echo -p "$1" --dport 53 -j RETURN -m comment --comment "$MARK-dns";
 # return traffic ABOVE all DROPs; NEW outbound to private ranges still falls
 # through to the DROP rules.
 est_args() { echo -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN -m comment --comment "$MARK-est"; }
-# Container -> host-local tailnet (MagicDNS etc.), matched on the INPUT chain.
+# Container -> host-local tailnet (MagicDNS 100.100.100.100 etc.). tailscale
+# intercepts/DNATs that address in nat PREROUTING BEFORE the filter INPUT
+# chain, so an INPUT rule never matches (pkts=0). Drop in the `raw` PREROUTING
+# hook instead — it runs before conntrack and nat, catching the original
+# destination. (input_args kept only to clean up the older INPUT-chain rule.)
+raw_args()   { echo -i "$DOCKER_IFACE" -d "$1" -j DROP -m comment --comment "$MARK-hostlocal"; }
 input_args() { echo -i "$DOCKER_IFACE" -d "$1" -j DROP -m comment --comment "$MARK-hostlocal"; }
 
 ensure_chain() {
@@ -94,26 +99,29 @@ install_rules() {
   fi
 }
 
-# Host-local tailnet block lives in INPUT (FORWARD/DOCKER-USER never sees
-# traffic destined to an address that is local to the host, e.g. MagicDNS).
-install_input() {
+# Host-local tailnet block lives in raw/PREROUTING (before tailscale's DNAT).
+install_raw() {
   local ipt="$1"; shift
   local nets=("$@")
   for net in "${nets[@]}"; do
-    if ! "$ipt" -C INPUT $(input_args "$net") 2>/dev/null; then
-      "$ipt" -I INPUT $(input_args "$net"); echo "  [$ipt] INPUT DROP ${DOCKER_IFACE} -> $net (host-local tailnet)"
+    if ! "$ipt" -t raw -C PREROUTING $(raw_args "$net") 2>/dev/null; then
+      "$ipt" -t raw -I PREROUTING $(raw_args "$net"); echo "  [$ipt] raw/PREROUTING DROP ${DOCKER_IFACE} -> $net (host-local tailnet)"
     else
-      echo "  [$ipt] INPUT already present -> $net"
+      echo "  [$ipt] raw/PREROUTING already present -> $net"
     fi
   done
 }
 
-remove_input() {
+remove_raw() {
   local ipt="$1"; shift
   local nets=("$@")
   for net in "${nets[@]}"; do
+    while "$ipt" -t raw -C PREROUTING $(raw_args "$net") 2>/dev/null; do
+      "$ipt" -t raw -D PREROUTING $(raw_args "$net"); echo "  [$ipt] removed raw/PREROUTING -> $net"
+    done
+    # Clean up the older (ineffective) filter/INPUT rule if a previous version left one.
     while "$ipt" -C INPUT $(input_args "$net") 2>/dev/null; do
-      "$ipt" -D INPUT $(input_args "$net"); echo "  [$ipt] removed INPUT -> $net"
+      "$ipt" -D INPUT $(input_args "$net"); echo "  [$ipt] removed stale INPUT -> $net"
     done
   done
 }
@@ -141,30 +149,30 @@ case "${1:-install}" in
   install)
     echo "Installing $MARK rules into $CHAIN (DNS allowed, private ranges dropped) ..."
     install_rules iptables "${V4_BLOCK[@]}"
-    install_input iptables "${V4_INPUT_BLOCK[@]}"
+    install_raw iptables "${V4_INPUT_BLOCK[@]}"
     if command -v ip6tables >/dev/null 2>&1; then
       install_rules ip6tables "${V6_BLOCK[@]}"
-      install_input ip6tables "${V6_INPUT_BLOCK[@]}"
+      install_raw ip6tables "${V6_INPUT_BLOCK[@]}"
     fi
     echo "Done. Egress containers can resolve DNS + reach the public internet only."
     ;;
   remove)
     echo "Removing $MARK rules ..."
     remove_rules iptables "${V4_BLOCK[@]}"
-    remove_input iptables "${V4_INPUT_BLOCK[@]}"
+    remove_raw iptables "${V4_INPUT_BLOCK[@]}"
     if command -v ip6tables >/dev/null 2>&1; then
       remove_rules ip6tables "${V6_BLOCK[@]}"
-      remove_input ip6tables "${V6_INPUT_BLOCK[@]}"
+      remove_raw ip6tables "${V6_INPUT_BLOCK[@]}"
     fi
     echo "Done."
     ;;
   status)
     echo "=== $CHAIN (FORWARD) ==="; iptables -n -L "$CHAIN" --line-numbers || true
-    echo "=== INPUT (host-local, $MARK-hostlocal only) ==="
-    iptables -n -L INPUT --line-numbers | grep -E "NUM|$MARK-hostlocal" || true
+    echo "=== raw/PREROUTING (host-local, $MARK-hostlocal) ==="
+    iptables -t raw -n -L PREROUTING -v --line-numbers | grep -E "pkts|$MARK-hostlocal" || true
     if command -v ip6tables >/dev/null 2>&1; then
       echo "--- IPv6 $CHAIN ---"; ip6tables -n -L "$CHAIN" --line-numbers || true
-      echo "--- IPv6 INPUT ---"; ip6tables -n -L INPUT --line-numbers | grep -E "NUM|$MARK-hostlocal" || true
+      echo "--- IPv6 raw/PREROUTING ---"; ip6tables -t raw -n -L PREROUTING -v --line-numbers | grep -E "pkts|$MARK-hostlocal" || true
     fi
     ;;
   *)
