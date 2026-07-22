@@ -6,7 +6,10 @@
 # The container runs as a NON-root user (`runner`). It carries a broad set of
 # recon / analysis / forensics tools. Heavier tools (Volatility3, Ghidra) are
 # intentionally left out — put those in a separate, larger optional image.
-FROM debian:bookworm-slim
+#
+# Base: Kali rolling — ships ffuf, nuclei, nikto, radare2, etc. straight from
+# apt, so no separate Go-tool release downloads are needed.
+FROM kalilinux/kali-rolling
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -22,12 +25,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         git \
         bash \
         jq \
-        # recon / network
+        # recon / network / web
         nmap \
         masscan \
         whois \
         dnsutils \
         nikto \
+        ffuf \
+        nuclei \
         # tls / capture
         tshark \
         # binary / malware / forensics
@@ -43,30 +48,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
-# Go-based tools: ffuf + nuclei (fetched as static release binaries)
-# ---------------------------------------------------------------------------
-ARG TARGETARCH=amd64
-ARG FFUF_VERSION=2.1.0
-ARG NUCLEI_VERSION=3.3.7
-
-RUN set -eux; \
-    mkdir -p /opt/tools/bin; \
-    # ffuf
-    curl -fsSL -o /tmp/ffuf.tar.gz \
-        "https://github.com/ffuf/ffuf/releases/download/v${FFUF_VERSION}/ffuf_${FFUF_VERSION}_linux_${TARGETARCH}.tar.gz"; \
-    tar -xzf /tmp/ffuf.tar.gz -C /opt/tools/bin ffuf; \
-    # nuclei
-    curl -fsSL -o /tmp/nuclei.zip \
-        "https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${TARGETARCH}.zip"; \
-    (cd /tmp && python3 -c "import zipfile,sys; zipfile.ZipFile('nuclei.zip').extract('nuclei','/opt/tools/bin')"); \
-    chmod +x /opt/tools/bin/ffuf /opt/tools/bin/nuclei; \
-    rm -f /tmp/ffuf.tar.gz /tmp/nuclei.zip
-
-# ---------------------------------------------------------------------------
 # testssl.sh (shell script, pinned tag)
 # ---------------------------------------------------------------------------
 ARG TESTSSL_VERSION=3.2
 RUN set -eux; \
+    mkdir -p /opt/tools/bin; \
     git clone --depth 1 --branch "v${TESTSSL_VERSION}" \
         https://github.com/drwetter/testssl.sh.git /opt/testssl; \
     ln -s /opt/testssl/testssl.sh /opt/tools/bin/testssl.sh
