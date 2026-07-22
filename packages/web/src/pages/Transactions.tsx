@@ -193,16 +193,16 @@ export function Transactions(): JSX.Element {
           <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
             <div>
               <div className="text-[11px] text-muted uppercase tracking-wide">Total spend</div>
-              <div className="tnum text-2xl font-semibold text-ink leading-tight">
-                {spendParts.length ? spendParts.join(' · ') : formatMoney(0)}
+              <div className="tnum text-2xl font-semibold text-expense leading-tight">
+                {spendParts.length ? spendParts.map((p) => `-${p}`).join(' · ') : formatMoney(0)}
               </div>
               {hasTransfers && <div className="text-[10px] text-muted mt-0.5">excludes transfers</div>}
             </div>
             {incomeParts.length > 0 && (
               <div>
                 <div className="text-[11px] text-muted uppercase tracking-wide">Income</div>
-                <div className="tnum text-2xl font-semibold text-emerald-400 leading-tight">
-                  {incomeParts.join(' · ')}
+                <div className="tnum text-2xl font-semibold text-income leading-tight">
+                  {incomeParts.map((p) => `+${p}`).join(' · ')}
                 </div>
               </div>
             )}
@@ -278,7 +278,8 @@ function CategoryGroups({
           magnitude += Math.abs(e.amount);
         }
         const sorted = [...net.entries()].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
-        const parts = sorted.map(([c, v]) => (v >= 0 ? `+${formatMoney(v, c)}` : formatMoney(Math.abs(v), c)));
+        // Signed: income shows +…, expenses show -… (formatMoney adds the minus).
+        const parts = sorted.map(([c, v]) => (v >= 0 ? `+${formatMoney(v, c)}` : formatMoney(v, c)));
         const positive = (sorted[0]?.[1] ?? 0) > 0;
         return { key, list, parts, magnitude, count: list.length, positive };
       })
@@ -315,7 +316,7 @@ function CategoryGroups({
               {g.key === 'Transfers' && (
                 <span className="text-[10px] text-muted border border-edge rounded-full px-1.5 py-0.5">not counted</span>
               )}
-              <span className={`tnum ml-auto text-sm font-semibold whitespace-nowrap ${g.positive ? 'text-emerald-400' : ''}`}>
+              <span className={`tnum ml-auto text-sm font-semibold whitespace-nowrap ${g.positive ? 'text-income' : 'text-expense'}`}>
                 {g.parts.length ? g.parts.join(' · ') : formatMoney(0)}
               </span>
               <span className={`text-muted text-xs w-4 text-center transition-transform ${isOpen ? 'rotate-180' : ''}`}>▾</span>

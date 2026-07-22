@@ -83,6 +83,15 @@
   font-feature-settings: 'tnum' 1, 'lnum' 1;
 }
 
+/* Semantic money colors — theme-aware (a brighter red/green in dark mode, a
+   deeper one on the light theme) so expenses always read as red, income green. */
+.text-expense {
+  color: var(--expense);
+}
+.text-income {
+  color: var(--income);
+}
+
 /* Keyboard focus ring — visible for keyboard users, invisible on mouse/touch.
    Applies to every interactive element that doesn't opt out. */
 :focus-visible {
