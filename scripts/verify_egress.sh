@@ -11,6 +11,8 @@
 #      bridge).
 #   3. network=none is still zero-network (detonation).
 #   4. egress container is actually on the dedicated subnet.
+#   5. persistence readiness: network exists, boot unit enabled, rules loaded
+#      (run as root for section 5). For a true end-to-end test: reboot, re-run.
 # Exits non-zero if any check fails.
 set -uo pipefail
 
@@ -20,6 +22,9 @@ PEER="${2:-100.64.0.1}"            # pass a real tailnet peer IP for a stronger 
 AUTH="Authorization: Bearer ${CYBER_EXEC_TOKEN}"
 CT='Content-Type: application/json'
 EGRESS_SUBNET_PREFIX="${EGRESS_SUBNET_PREFIX:-172.31.255.}"
+EGRESS_SUBNET_CIDR="${EGRESS_SUBNET_CIDR:-172.31.255.0/24}"
+EGRESS_NET="${EGRESS_NET:-cyberexec-egress}"
+FW_UNIT="${FW_UNIT:-egress-firewall}"
 
 fails=0
 ok()   { printf '  \033[32mPASS\033[0m %s\n' "$1"; }
@@ -56,6 +61,28 @@ echo "== 3) network=none detonation (zero network) =="
 NONE=$(api '{"network":"none","timeout":15,"command":"curl -s -m6 -o /dev/null https://1.1.1.1 2>/dev/null && echo NET || echo NONET; ip -o -4 addr show 2>/dev/null | grep -v \" lo \" | wc -l"}')
 echo "$NONE" | sed 's/^/    /'
 grep -q "NONET" <<<"$NONE" && ok "network=none has no internet" || bad "network=none reached the internet!"
+
+echo "== 4) persistence readiness (network + rules survive reboot) =="
+# Docker persists networks across reboot; the app also recreates it if missing.
+SUB=$(docker network inspect "$EGRESS_NET" -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}' 2>/dev/null || true)
+[ "$SUB" = "$EGRESS_SUBNET_CIDR" ] && ok "egress network exists ($EGRESS_NET $SUB)" \
+  || bad "egress network missing/wrong subnet (got '${SUB:-none}', want $EGRESS_SUBNET_CIDR)"
+# Boot unit enabled -> re-applies the firewall on every boot / docker restart.
+if systemctl is-enabled --quiet "$FW_UNIT" 2>/dev/null; then
+  ok "$FW_UNIT.service enabled (re-applies rules at boot/docker-restart)"
+else
+  bad "$FW_UNIT.service NOT enabled — rules will NOT survive reboot"
+fi
+# Rules currently loaded (needs root).
+if iptables -C DOCKER-USER -s "$EGRESS_SUBNET_CIDR" -d 100.64.0.0/10 -j DROP \
+     -m comment --comment cyber-exec-egress 2>/dev/null \
+   && iptables -t raw -C PREROUTING -s "$EGRESS_SUBNET_CIDR" -d 100.64.0.0/10 -j DROP \
+     -m comment --comment cyber-exec-egress-hostlocal 2>/dev/null; then
+  ok "firewall rules currently loaded (DOCKER-USER + raw/PREROUTING)"
+else
+  bad "firewall rules not fully loaded (run as root; is $FW_UNIT active?)"
+fi
+echo "    (end-to-end reboot test: sudo reboot; then re-run this script)"
 
 echo
 if [ "$fails" -eq 0 ]; then
