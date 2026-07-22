@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { DashboardSummary } from '../api/client';
+import type { DashboardSummary, Forecast } from '../api/client';
 import { api } from '../api/client';
 import { Donut, type DonutDatum } from '../components/Donut';
 import { Bidi, Card, Skeleton, StatCard } from '../components/ui';
@@ -208,6 +208,9 @@ export function Dashboard(): JSX.Element {
         />
       </div>
 
+      {/* Current balance + month-end forecast */}
+      <ForecastCard f={data.forecast} nav={nav} />
+
       {/* Interactive donut + tappable legend */}
       <Card>
         <div className="flex items-center justify-between mb-2">
@@ -385,6 +388,70 @@ export function Dashboard(): JSX.Element {
 
 function Empty(): JSX.Element {
   return <div className="text-muted text-sm py-8 text-center">No data for this period.</div>;
+}
+
+/** Current bank balance + projected end-of-month balance, with the breakdown
+ *  behind the estimate. Updates on every dashboard load (i.e. every ledger change). */
+function ForecastCard({ f, nav }: { f: Forecast; nav: (to: string) => void }): JSX.Element {
+  const cur = f.currency;
+  const monthName = formatMonthLong(`${f.month}-01`);
+  const grew = f.projectedEndBalance != null && f.currentBalance != null && f.projectedEndBalance >= f.currentBalance;
+  const asOf = f.asOf ? new Date(f.asOf).toLocaleDateString('he-IL') : null;
+  return (
+    <Card style={{ background: 'linear-gradient(135deg, #38bdf814, transparent 60%)' }}>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-medium">💰 Balance &amp; forecast</h3>
+        {f.hasBalance ? (
+          <span className="text-[11px] text-muted">bank balance · as of {asOf}</span>
+        ) : (
+          <button onClick={() => nav('/settings')} className="text-xs text-brand">Sync bank →</button>
+        )}
+      </div>
+
+      {f.hasBalance ? (
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <div className="text-[11px] text-muted uppercase tracking-wide">Current balance</div>
+            <div className="tnum text-2xl font-semibold leading-tight">{formatMoney(f.currentBalance ?? 0, cur)}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted uppercase tracking-wide">Projected · end of {monthName}</div>
+            <div className={`tnum text-2xl font-semibold leading-tight ${grew ? 'text-income' : 'text-expense'}`}>
+              {formatMoney(f.projectedEndBalance ?? 0, cur)}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div className="text-[11px] text-muted uppercase tracking-wide">Projected net this month</div>
+          <div className={`tnum text-2xl font-semibold leading-tight ${f.projectedNet >= 0 ? 'text-income' : 'text-expense'}`}>
+            {formatMoney(f.projectedNet, cur, { sign: true })}
+          </div>
+          <div className="text-xs text-muted mt-1">Connect your bank in Settings to see your actual balance.</div>
+        </div>
+      )}
+
+      {/* Transparent breakdown behind the estimate */}
+      <div className="mt-3 pt-3 border-t border-edge grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+        <Metric label="Spent so far" value={formatMoney(f.monthToDate.spend, cur)} tone="expense" />
+        <Metric label="Income so far" value={formatMoney(f.monthToDate.income, cur)} tone="income" />
+        <Metric label="Expected more spend" value={formatMoney(f.expectedRemaining.spend, cur)} tone="expense" />
+        <Metric label="Expected more income" value={formatMoney(f.expectedRemaining.income, cur)} tone="income" />
+      </div>
+      <div className="text-[10px] text-muted mt-2">
+        Estimate — assumes this month ends like your 3-month average. Updates as new transactions arrive.
+      </div>
+    </Card>
+  );
+}
+
+function Metric({ label, value, tone }: { label: string; value: string; tone: 'income' | 'expense' }): JSX.Element {
+  return (
+    <div>
+      <div className="text-muted">{label}</div>
+      <div className={`tnum font-semibold ${tone === 'income' ? 'text-income' : 'text-expense'}`}>{value}</div>
+    </div>
+  );
 }
 
 /** Shaped placeholder shown while the dashboard loads — matches the real layout

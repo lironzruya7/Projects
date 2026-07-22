@@ -9,6 +9,7 @@ import { insertParsed } from '../repo/transactions.js';
 import { runDedup } from '../dedup/engine.js';
 import { loadToken, saveToken, deleteToken, hasToken } from '../email/tokenStore.js';
 import { getProviderSpec, type ScrapeProvider } from './providers.js';
+import { saveBankBalances, type BankBalance } from '../repo/balances.js';
 
 const CRED_PREFIX = 'scrape:';
 
@@ -127,6 +128,23 @@ function persistScrape(spec: ScrapeProvider, accounts: RawAccount[], startDate: 
   if (ids.length === 0) deleteBatch(batchId);
   else setBatchRowCount(batchId, ids.length);
 
+  // Capture the bank-reported balance (available on bank accounts, e.g. Yahav)
+  // so the dashboard can show the current balance + a month-end forecast.
+  if (spec.sourceType === 'bank') {
+    const asOf = new Date().toISOString();
+    const balances: BankBalance[] = accounts
+      .filter((a) => typeof a.balance === 'number' && Number.isFinite(a.balance))
+      .map((a) => ({
+        provider: spec.key,
+        label: spec.label,
+        accountNumber: a.accountNumber ?? null,
+        balance: Number(a.balance),
+        currency: 'ILS',
+        asOf,
+      }));
+    if (balances.length > 0) saveBankBalances(spec.key, balances);
+  }
+
   runDedup();
 
   return {
@@ -158,5 +176,6 @@ interface RawTxn {
 }
 interface RawAccount {
   accountNumber?: string;
+  balance?: number;
   txns?: RawTxn[];
 }

@@ -1,6 +1,7 @@
 import { getSetting } from '../db/db.js';
 import { allPrimary } from '../repo/transactions.js';
 import { listAlerts } from '../dedup/engine.js';
+import { getBankBalances } from '../repo/balances.js';
 import type { SourceType, Transaction } from '../models/types.js';
 
 const MS_DAY = 86_400_000;
@@ -85,6 +86,71 @@ export interface DashboardSummary {
   activeCurrency: string;
   counts: { ledger: number; alerts: number };
   range: { min: string; max: string }; // earliest / latest month with data
+  forecast: Forecast;
+}
+
+export interface Forecast {
+  currency: string;
+  month: string; // current calendar month (YYYY-MM)
+  hasBalance: boolean;
+  currentBalance: number | null; // latest bank-reported balance (sum), null if never synced
+  asOf: string | null; // when that balance was captured
+  monthToDate: { spend: number; income: number };
+  typical: { spend: number; income: number }; // 3-month average (full months)
+  expectedRemaining: { spend: number; income: number };
+  projectedNet: number; // projected income − spend for the whole month
+  projectedEndBalance: number | null; // current balance + projected remaining net
+}
+
+/**
+ * Current bank balance + a month-end forecast. The forecast assumes the current
+ * month plays out like a typical (3-month-average) month: expected remaining
+ * spend/income is what's left of a typical month after month-to-date activity.
+ * Recomputed on every dashboard load, so it tracks each new transaction.
+ */
+export function buildForecast(base: string): Forecast {
+  const month = new Date().toISOString().slice(0, 7);
+  const txns = allPrimary().filter((t) => t.currency === base);
+
+  const spendIn = (ym: string): number =>
+    txns.filter((t) => isExpense(t) && monthKey(t.date) === ym).reduce((s, t) => s + mag(t), 0);
+  const incomeIn = (ym: string): number =>
+    txns.filter((t) => isIncome(t) && effectiveMonth(t) === ym).reduce((s, t) => s + mag(t), 0);
+
+  const mtdSpend = spendIn(month);
+  const mtdIncome = incomeIn(month);
+
+  // Typical = average of the three full months before the current one.
+  const prev = [addMonths(month, -1), addMonths(month, -2), addMonths(month, -3)];
+  const typicalSpend = prev.reduce((s, m) => s + spendIn(m), 0) / prev.length;
+  const typicalIncome = prev.reduce((s, m) => s + incomeIn(m), 0) / prev.length;
+
+  const restSpend = Math.max(0, typicalSpend - mtdSpend);
+  const restIncome = Math.max(0, typicalIncome - mtdIncome);
+  const projectedNet = mtdIncome + restIncome - (mtdSpend + restSpend);
+
+  const balances = getBankBalances().filter((b) => b.currency === base);
+  const hasBalance = balances.length > 0;
+  const currentBalance = hasBalance ? balances.reduce((s, b) => s + b.balance, 0) : null;
+  const asOf = hasBalance ? balances.map((b) => b.asOf).sort().at(-1) ?? null : null;
+  const projectedEndBalance = currentBalance != null ? currentBalance + restIncome - restSpend : null;
+
+  return {
+    currency: base,
+    month,
+    hasBalance,
+    currentBalance: currentBalance != null ? round2(currentBalance) : null,
+    asOf,
+    monthToDate: { spend: round2(mtdSpend), income: round2(mtdIncome) },
+    typical: { spend: round2(typicalSpend), income: round2(typicalIncome) },
+    expectedRemaining: { spend: round2(restSpend), income: round2(restIncome) },
+    projectedNet: round2(projectedNet),
+    projectedEndBalance: projectedEndBalance != null ? round2(projectedEndBalance) : null,
+  };
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 /** Earliest and latest month present in the ledger (for the month picker). */
@@ -215,6 +281,7 @@ export function buildDashboard(filter: DashboardFilter = {}): DashboardSummary {
     activeCurrency,
     counts: { ledger: all.length, alerts: openAlerts },
     range,
+    forecast: buildForecast(base),
   };
 }
 

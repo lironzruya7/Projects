@@ -90,6 +90,20 @@ export interface DashboardSummary {
   activeCurrency: string;
   counts: { ledger: number; alerts: number };
   range: { min: string; max: string };
+  forecast: Forecast;
+}
+
+export interface Forecast {
+  currency: string;
+  month: string;
+  hasBalance: boolean;
+  currentBalance: number | null;
+  asOf: string | null;
+  monthToDate: { spend: number; income: number };
+  typical: { spend: number; income: number };
+  expectedRemaining: { spend: number; income: number };
+  projectedNet: number;
+  projectedEndBalance: number | null;
 }
 
 export interface Account {
