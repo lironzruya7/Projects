@@ -70,23 +70,34 @@ function looksLikeMoney(raw: string): boolean {
   return /(?:^|[^\d])\d{1,3}(?:[.,]\d{3})*[.,]\d{2}(?!\d)/.test(raw) || /\d[.,]\d{2}(?!\d)/.test(raw);
 }
 
+// Text just before a number that marks it as a card/account number, not money
+// (e.g. PayPal "שולם מהכרטיס המסתיים ב-3235"). Such numbers must never be a total.
+const CARD_CONTEXT = /כרטיס|מסתיים|אשראי|חשבון|ויזה|ישראכרט|visa|master|amex|card|ending|acct|account|\*{2,}|x{3,}|•{2,}|·{2,}/i;
+
+function isCardContext(text: string, matchIndex: number): boolean {
+  return CARD_CONTEXT.test(text.slice(Math.max(0, matchIndex - 22), matchIndex));
+}
+
 /**
- * Extract the total. Two reliable signals only — no "largest number anywhere"
- * fallback (that grabbed invoice/reference numbers like 12641091 and produced
- * absurd totals):
- *   1. A number directly adjacent to a currency symbol (₪ 152.90 / 152.90 ₪).
- *   2. A properly-formatted (two-decimal) number on a "total / לתשלום" line.
- * Everything is bounded to a sane money range. If neither signal fires we return
- * null so the caller skips the row rather than inventing an amount.
+ * Extract the total. Reliable signals only — no "largest number anywhere":
+ *   1. A number adjacent to a currency symbol (₪ 152.90 / 152.90 ₪).
+ *   2. A two-decimal number on a "total / לתשלום" line.
+ * Numbers in card/account context (e.g. a funding card's last-4) are excluded,
+ * and properly-formatted money (two decimals) is preferred over bare integers so
+ * a card number like 3235 can't win over a real ₪39.00. Bounded to a sane range.
  */
 function extractTotal(text: string, lines: string[]): number | null {
-  // 1. Currency-anchored amounts.
-  const anchored: number[] = [];
+  // 1. Currency-anchored amounts, split into money-formatted vs bare integers.
+  const money: number[] = [];
+  const bare: number[] = [];
   const re = new RegExp(`(?:${CURRENCY_TOKEN})\\s*(-?[\\d.,]+)|(-?[\\d.,]+)\\s*(?:${CURRENCY_TOKEN})`, 'gi');
   for (const m of text.matchAll(re)) {
     const numStr = m[1] ?? m[2];
-    const v = numStr ? plausibleAmount(numStr) : null;
-    if (v !== null) anchored.push(v);
+    if (!numStr) continue;
+    const v = plausibleAmount(numStr);
+    if (v === null) continue;
+    if (!looksLikeMoney(numStr) && isCardContext(text, m.index ?? 0)) continue; // skip card numbers
+    (looksLikeMoney(numStr) ? money : bare).push(v);
   }
 
   // 2. Two-decimal amounts on total-keyword lines.
@@ -101,10 +112,10 @@ function extractTotal(text: string, lines: string[]): number | null {
     }
   }
 
-  // Prefer amounts that are BOTH on a total line and near a currency symbol;
-  // otherwise the keyworded ones; otherwise any currency-anchored amount.
-  const both = keyworded.filter((k) => anchored.includes(k));
-  const pool = both.length ? both : keyworded.length ? keyworded : anchored;
+  // Prefer: on a total line AND money-formatted → keyworded → money-formatted
+  // anchored → bare integers (last resort).
+  const both = keyworded.filter((k) => money.includes(k));
+  const pool = both.length ? both : keyworded.length ? keyworded : money.length ? money : bare;
   if (pool.length === 0) return null;
   return Math.max(...pool);
 }
