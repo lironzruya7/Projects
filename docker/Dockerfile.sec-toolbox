@@ -12,8 +12,7 @@
 FROM kalilinux/kali-rolling
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    LANG=C.UTF-8 \
-    PATH="/opt/tools/bin:${PATH}"
+    LANG=C.UTF-8
 
 # ---------------------------------------------------------------------------
 # Distro packages
@@ -34,6 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ffuf \
         nuclei \
         # tls / capture
+        testssl.sh \
         tshark \
         # binary / malware / forensics
         binwalk \
@@ -48,24 +48,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
-# testssl.sh (shell script, pinned tag)
-# ---------------------------------------------------------------------------
-ARG TESTSSL_VERSION=3.2
-RUN set -eux; \
-    mkdir -p /opt/tools/bin; \
-    git clone --depth 1 --branch "v${TESTSSL_VERSION}" \
-        https://github.com/drwetter/testssl.sh.git /opt/testssl; \
-    ln -s /opt/testssl/testssl.sh /opt/tools/bin/testssl.sh
-
-# ---------------------------------------------------------------------------
-# Python-based tools: requests, oletools, pdfid/pdf-parser (via pdfid pkg)
+# Python-based tools: requests + oletools via pip.
 # ---------------------------------------------------------------------------
 RUN set -eux; \
     pip3 install --no-cache-dir --break-system-packages \
         requests \
-        oletools \
-        pdfid \
-        pdf-parser
+        oletools
+
+# ---------------------------------------------------------------------------
+# pdfid / pdf-parser — Didier Stevens' canonical single-file scripts.
+# (Not on PyPI; fetched from the upstream suite and put on PATH.)
+# ---------------------------------------------------------------------------
+ARG DSS_RAW=https://raw.githubusercontent.com/DidierStevens/DidierStevensSuite/master
+RUN set -eux; \
+    curl -fsSL -o /usr/local/bin/pdfid      "${DSS_RAW}/pdfid.py"; \
+    curl -fsSL -o /usr/local/bin/pdf-parser "${DSS_RAW}/pdf-parser.py"; \
+    # Upstream shebang is `env python`; Kali only ships python3.
+    sed -i '1s|.*|#!/usr/bin/env python3|' /usr/local/bin/pdfid /usr/local/bin/pdf-parser; \
+    chmod +x /usr/local/bin/pdfid /usr/local/bin/pdf-parser; \
+    pdfid --help >/dev/null 2>&1 || pdfid -h >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------------------
 # Non-root runtime user. /work is the mount point for the throwaway workdir.
