@@ -48,6 +48,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
+# Kali's testssl.sh package installs the binary as `testssl` (no .sh); expose
+# the canonical `testssl.sh` name via a symlink to whatever the pkg shipped.
+# ---------------------------------------------------------------------------
+RUN set -eux; \
+    bin="$(dpkg -L testssl.sh | grep -E '^/usr/bin/' | grep -i testssl | head -1)"; \
+    test -n "$bin"; \
+    ln -sf "$bin" /usr/local/bin/testssl.sh; \
+    testssl.sh --version 2>&1 | head -2
+
+# ---------------------------------------------------------------------------
 # Python-based tools: requests + oletools via pip.
 # ---------------------------------------------------------------------------
 RUN set -eux; \
