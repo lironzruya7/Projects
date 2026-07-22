@@ -29,6 +29,7 @@ tailnet client ──HTTPS──▶ tailscale serve :443 ──▶ 127.0.0.1:800
 | `docker/Dockerfile.heavy` | Reserved, opt-in `sec-toolbox-heavy:latest` (Ghidra/Volatility3/…) |
 | `deploy/cyber-exec.service` | systemd unit |
 | `deploy/egress-firewall.sh` | Host firewall: restrict egress-mode to internet-only |
+| `deploy/egress-firewall.service` | Boot unit that re-applies the egress firewall |
 | `scripts/smoke_test.sh` | End-to-end smoke test (base) |
 | `scripts/smoke_heavy.sh` | Smoke test for the heavy image |
 | `.env.example` | Token + optional overrides |
@@ -169,7 +170,9 @@ Egress isolation (important):
   internet. To restrict egress to internet-only, run
   `sudo deploy/egress-firewall.sh install` on the host — it adds `DOCKER-USER`
   DROP rules for those ranges (v4 + v6). Without it, an egress-mode command is a
-  potential pivot into your private network.
+  potential pivot into your private network. To survive reboots and Docker
+  restarts (which flush `DOCKER-USER`), install `deploy/egress-firewall.service`
+  (`PartOf=docker.service`) instead of relying on `netfilter-persistent`.
 
 Robustness:
 
