@@ -22,6 +22,10 @@ EnvironmentFile=/opt/cyber-exec/.env
 # private /tmp is invisible to dockerd, so -v mounts would come up empty.
 StateDirectory=cyber-exec
 Environment=CYBER_EXEC_WORKROOT=/var/lib/cyber-exec/work
+# Point Docker at a writable config dir inside the (host-visible) state dir so
+# it stops warning about ~/.docker/config.json being unreadable — that warning
+# otherwise pollutes every response's stderr. %S expands to /var/lib.
+Environment=DOCKER_CONFIG=%S/cyber-exec/.docker
 ExecStart=/opt/cyber-exec/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1
 Restart=on-failure
 RestartSec=2
