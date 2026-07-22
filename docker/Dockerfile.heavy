@@ -82,8 +82,10 @@ ENV GHIDRA_INSTALL_DIR=/opt/ghidra
 # Kept as its own late layer so the (large) Ghidra download layer stays cached.
 # ---------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        fontconfig \
+        libharfbuzz0b \
         libfreetype6 \
+        libfontconfig1 \
+        fontconfig \
         fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
