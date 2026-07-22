@@ -15,14 +15,18 @@ Security model:
   * Only the throwaway workdir is ever mounted into the container.
   * The command runs as a NON-root user inside the container.
   * Nothing persists between runs; the workdir is always deleted.
+  * Defense-in-depth throttling: per-token rate limit + a hard concurrency cap
+    (in-process, so the service MUST run single-worker).
 """
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
 import hmac
 import logging
+import math
 import os
 import re
 import shutil
@@ -32,7 +36,8 @@ import threading
 import time
 from typing import List, Literal, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
 # --------------------------------------------------------------------------- #
@@ -89,6 +94,23 @@ VOL_SYMBOL_MOUNT = "/opt/vol-symbols"
 
 # Upper sanity bound for any timeout before per-image capping (== max heavy cap).
 MAX_TIMEOUT_HARD = 1800
+
+# --- Defense-in-depth throttling (in-process; single-worker uvicorn only) ---
+# Rate limit: token-bucket per bearer token, checked BEFORE spinning a
+# container. Concurrency cap: hard ceiling on simultaneous containers. These
+# limit how MUCH a holder of the token can do if the token leaks (the Tailscale
+# ACL limits WHO can reach the service; this limits how much).
+EXEC_RATE_PER_MIN = int(os.environ.get("EXEC_RATE_PER_MIN", "30"))
+EXEC_RATE_BURST = int(os.environ.get("EXEC_RATE_BURST", "10"))
+EXEC_MAX_CONCURRENCY = int(os.environ.get("EXEC_MAX_CONCURRENCY", "3"))
+# Retry-After (seconds) suggested on a concurrency rejection (a slot may free
+# at any time, so this is only a hint).
+EXEC_CONC_RETRY_AFTER = int(os.environ.get("EXEC_CONC_RETRY_AFTER", "5"))
+# Optional coarse per-IP request rate to blunt token brute-force. Applied
+# BEFORE auth. 0 disables it (default) — the Tailscale ACL already limits who
+# can reach the service, so this is a minor extra.
+EXEC_IP_RATE_PER_MIN = int(os.environ.get("EXEC_IP_RATE_PER_MIN", "0"))
+EXEC_IP_RATE_BURST = int(os.environ.get("EXEC_IP_RATE_BURST", "20"))
 
 TOKEN = os.environ.get("CYBER_EXEC_TOKEN", "")
 
@@ -170,8 +192,9 @@ class ExecResponse(BaseModel):
 # --------------------------------------------------------------------------- #
 
 
-def require_auth(authorization: str = Header(default="")) -> None:
-    """Constant-time bearer-token check. Missing/wrong -> 401."""
+def require_auth(authorization: str = Header(default="")) -> str:
+    """Constant-time bearer-token check. Missing/wrong -> 401. Returns the
+    validated token, used as the rate-limit key."""
     if not TOKEN:
         # Fail closed: never run without a configured token.
         raise HTTPException(status_code=503, detail="server token not configured")
@@ -182,6 +205,71 @@ def require_auth(authorization: str = Header(default="")) -> None:
     # the full "Bearer <token>" strings avoids leaking the scheme boundary.
     if not hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8")):
         raise HTTPException(status_code=401, detail="unauthorized")
+    return TOKEN
+
+
+# --------------------------------------------------------------------------- #
+# Throttling: token-bucket rate limit + hard concurrency cap
+# (in-process, single-worker only — in-memory counters are not shared across
+# workers, which is why the box must stay single-worker.)
+# --------------------------------------------------------------------------- #
+
+
+class RateLimited(Exception):
+    """Raised to reject a request with 429. `error` is a short machine token
+    (no internals leaked); `retry_after` is seconds."""
+
+    def __init__(self, error: str, retry_after: int) -> None:
+        self.error = error
+        self.retry_after = max(1, int(retry_after))
+
+
+class TokenBucket:
+    """Classic token bucket keyed by an arbitrary string. Capacity == burst;
+    refill == rate_per_min/60 tokens per second. Not awaited between check and
+    mutate, so it is race-free under single-threaded asyncio."""
+
+    def __init__(self, rate_per_min: int, burst: int) -> None:
+        self.rate = rate_per_min / 60.0
+        self.burst = float(max(1, burst))
+        self._state: dict[str, tuple[float, float]] = {}
+
+    def allow(self, key: str) -> tuple[bool, int]:
+        now = time.monotonic()
+        tokens, last = self._state.get(key, (self.burst, now))
+        tokens = min(self.burst, tokens + (now - last) * self.rate)
+        if tokens >= 1.0:
+            self._state[key] = (tokens - 1.0, now)
+            return True, 0
+        self._state[key] = (tokens, now)
+        if self.rate <= 0:
+            return False, 60
+        retry = math.ceil((1.0 - tokens) / self.rate)
+        return False, max(1, retry)
+
+
+class ConcurrencyGuard:
+    """Non-blocking counting guard. try_acquire()/release() have no await
+    between the check and the mutation, so the cap is never exceeded."""
+
+    def __init__(self, limit: int) -> None:
+        self.limit = max(1, limit)
+        self.active = 0
+
+    def try_acquire(self) -> bool:
+        if self.active >= self.limit:
+            return False
+        self.active += 1
+        return True
+
+    def release(self) -> None:
+        if self.active > 0:
+            self.active -= 1
+
+
+_token_bucket = TokenBucket(EXEC_RATE_PER_MIN, EXEC_RATE_BURST)
+_ip_bucket = TokenBucket(EXEC_IP_RATE_PER_MIN, EXEC_IP_RATE_BURST)
+_concurrency = ConcurrencyGuard(EXEC_MAX_CONCURRENCY)
 
 
 # --------------------------------------------------------------------------- #
@@ -373,11 +461,54 @@ def _docker_rm(name: str) -> None:
 app = FastAPI(title="cyber-exec", version="1.0.0")
 
 
+@app.exception_handler(RateLimited)
+async def _rate_limited_handler(request: Request, exc: RateLimited) -> JSONResponse:
+    # Uniform 429 body + Retry-After; no internals leaked.
+    return JSONResponse(
+        status_code=429,
+        content={"error": exc.error, "retry_after": exc.retry_after},
+        headers={"Retry-After": str(exc.retry_after)},
+    )
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def ip_guard(request: Request) -> None:
+    """Optional coarse per-IP rate limit, applied BEFORE auth to blunt token
+    brute-force. Disabled unless EXEC_IP_RATE_PER_MIN > 0."""
+    if EXEC_IP_RATE_PER_MIN <= 0:
+        return
+    ok, retry = _ip_bucket.allow(_client_ip(request))
+    if not ok:
+        raise RateLimited("rate_limited", retry)
+
+
 @app.get("/healthz")
 def healthz() -> dict:
+    # Exempt from auth + throttling: must answer even while saturated.
     return {"ok": True}
 
 
 @app.post("/api/exec", response_model=ExecResponse)
-def exec_endpoint(req: ExecRequest, _: None = Depends(require_auth)) -> ExecResponse:
-    return run_command(req)
+async def exec_endpoint(
+    req: ExecRequest,
+    _ip: None = Depends(ip_guard),          # optional per-IP guard (pre-auth)
+    token: str = Depends(require_auth),      # auth first -> 401 before any 429
+) -> ExecResponse:
+    # Rate limit (token bucket) — checked BEFORE spinning a container.
+    ok, retry = _token_bucket.allow(token)
+    if not ok:
+        raise RateLimited("rate_limited", retry)
+
+    # Hard concurrency cap — fail closed, never exceed N live containers.
+    if not _concurrency.try_acquire():
+        raise RateLimited("concurrency_limited", EXEC_CONC_RETRY_AFTER)
+    try:
+        # Offload the blocking docker run so the event loop stays responsive
+        # (health checks answer, overflow requests get rejected) while busy.
+        return await asyncio.to_thread(run_command, req)
+    finally:
+        # Release on success, timeout, OR crash — the slot is never leaked.
+        _concurrency.release()

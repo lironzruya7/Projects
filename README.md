@@ -111,11 +111,36 @@ Response:
 ```
 
 - `401` — missing/invalid bearer token (constant-time compare).
+- `429` — throttled (see below). Body `{"error": "...", "retry_after": N}` with a
+  `Retry-After` header. No container is spun for a rejected request.
 - `503` — `CYBER_EXEC_TOKEN` not configured (fails closed).
 - `422` — schema validation failure (unsafe file name, `timeout` out of
   `5..600`, bad `network` value).
 - `400` — file `b64` is not valid base64.
 - stdout/stderr are each capped at ~1 MB.
+
+## Throttling (defense-in-depth)
+
+`cyber_exec` is approval-gated on the OS side, **not** on the VPS — the VPS
+trusts only the bearer token. So if the token leaks, an attacker could hit
+`/api/exec` directly and spin unlimited containers. The Tailscale ACL limits
+**who** can reach the service; these in-process limits cap **how much**:
+
+- **Rate limit** — token-bucket **per bearer token**, checked *before* spinning
+  a container. `EXEC_RATE_PER_MIN=30`, `EXEC_RATE_BURST=10`.
+- **Concurrency cap** — hard ceiling on simultaneous containers,
+  `EXEC_MAX_CONCURRENCY=3`. Acquired before `docker run`, released in `finally`
+  (frees on success, timeout, or crash) — **fail closed**, never exceeds N.
+- Optional coarse **per-IP** rate (`EXEC_IP_RATE_PER_MIN`, default `0`/off) to
+  blunt token brute-force, applied pre-auth.
+
+Order: **auth (`401`) → rate/concurrency (`429`)**. `/healthz` is exempt and
+answers even while saturated. Overflow returns `429` with `Retry-After` and a
+`{"error","retry_after"}` body — no internals leaked, no container spun.
+
+> These counters are **in-memory**, so the service **must stay single-worker**
+> (`--workers 1`, as shipped in `run.sh` and the systemd unit). Multiple workers
+> would each keep their own counters and break the caps.
 
 ## Hardening
 
