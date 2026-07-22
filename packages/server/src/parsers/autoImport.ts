@@ -3,6 +3,7 @@ import { applyMapping, buildPreview } from './fileImport.js';
 import { parsePdfStatement } from './pdfStatement.js';
 import { readGrid } from './tabular.js';
 import { stripDirectionalMarks } from './encoding.js';
+import { isPaypalHeader, parsePaypalFile } from './paypal.js';
 import type { ParsedTransaction } from '../models/types.js';
 
 export interface AutoParseResult {
@@ -37,6 +38,16 @@ export function extractCardLast4(text: string): string | null {
     if (m) return m[1]!;
   }
   return null;
+}
+
+/** True if a CSV/XLSX buffer is a PayPal activity export (by its header row). */
+function isPaypalTabular(buf: Buffer, filename: string): boolean {
+  try {
+    const grid = readGrid(buf, filename);
+    return grid.rows.slice(0, 6).some((r) => isPaypalHeader(r));
+  } catch {
+    return false;
+  }
 }
 
 /** Scan a tabular file's top rows (above the data) for a card last-4. */
@@ -85,6 +96,25 @@ export async function autoParseFile(
       format: 'pdf',
       needsManual: r.parsed.length === 0,
       detail: r.parsed.length === 0 ? `No transaction rows found in ${r.lines} lines` : undefined,
+    };
+  }
+
+  // PayPal activity exports spread one purchase across several rows (payment +
+  // card funding + currency conversion) that net to zero under the generic
+  // column mapper. Detect and collapse them into one clean ILS outflow each.
+  if (!isPdf(buf, filename) && isPaypalTabular(buf, filename)) {
+    const r = parsePaypalFile(buf, filename);
+    return {
+      parsed: stamp(r.parsed, 'paypal'),
+      skipped: r.skipped,
+      provider: 'paypal',
+      accountLabel: label,
+      format: filename.toLowerCase().endsWith('.csv') ? 'csv' : 'xlsx',
+      needsManual: r.parsed.length === 0,
+      detail:
+        r.parsed.length === 0
+          ? 'No completed PayPal purchases found in this export'
+          : `Collapsed PayPal activity into ${r.parsed.length} purchase${r.parsed.length === 1 ? '' : 's'}`,
     };
   }
 

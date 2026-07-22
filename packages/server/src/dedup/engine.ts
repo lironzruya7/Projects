@@ -88,7 +88,14 @@ function findCandidates(txns: Transaction[], cfg: DedupSettings): Candidate[] {
         // Normal signal: amount + date window + fuzzy merchant.
         const normal = days <= cfg.dateWindowDays && sim >= cfg.merchantThreshold;
 
-        if (!strong && !normal) continue;
+        // PayPal cross-reference: the same purchase appears in the PayPal export,
+        // the card statement (as an opaque "PAYPAL" charge) and the email receipt.
+        // Match those on amount + date alone (a wider window, since the card
+        // posting lags the PayPal charge), because the merchant strings differ.
+        const paypalLink =
+          isPaypalish(t) && isPaypalish(other) && days <= Math.max(cfg.dateWindowDays, 7);
+
+        if (!strong && !normal && !paypalLink) continue;
 
         candidates.push({
           a: t,
@@ -100,6 +107,19 @@ function findCandidates(txns: Transaction[], cfg: DedupSettings): Candidate[] {
     }
   }
   return candidates;
+}
+
+/**
+ * A transaction that represents a PayPal payment — either imported from the
+ * PayPal activity export (provider 'paypal') or a card/bank line / email receipt
+ * whose text mentions PayPal. On the Isracard/Cal statement a PayPal purchase
+ * shows up only as a "PAYPAL" charge with the real merchant hidden, so we can't
+ * rely on merchant matching to cross-reference it.
+ */
+function isPaypalish(t: Transaction): boolean {
+  if ((t.sourceProvider ?? '').toLowerCase() === 'paypal') return true;
+  const hay = `${t.merchantNormalized} ${t.merchantRaw} ${t.description}`.toLowerCase();
+  return /paypal|פייפאל|פייפל/.test(hay);
 }
 
 /** Two invoice/transaction numbers refer to the same charge (digits compared). */
