@@ -32,6 +32,7 @@ tailnet client ──HTTPS──▶ tailscale serve :443 ──▶ 127.0.0.1:800
 | `deploy/egress-firewall.service` | Boot unit that re-applies the egress firewall |
 | `scripts/smoke_test.sh` | End-to-end smoke test (base) |
 | `scripts/smoke_heavy.sh` | Smoke test for the heavy image |
+| `scripts/smoke_offensive.sh` | Smoke test for the offensive tooling (base) |
 | `scripts/verify_egress.sh` | Post-change regression check (egress firewall + isolation) |
 | `.env.example` | Token + optional overrides |
 
@@ -44,9 +45,19 @@ docker build -t sec-toolbox:latest -f docker/Dockerfile.sec-toolbox docker/
 ```
 
 Included: `nmap`, `masscan`, `whois`, `dnsutils`, `ffuf`, `nuclei`, `nikto`,
-`sqlmap`, `testssl.sh`, `curl`, `jq`, `binwalk`, `yara`, `radare2`,
-`exiftool`, `oletools`, `pdfid`/`pdf-parser`, `tshark`, `python3` + `requests`.
-(Volatility3 + Ghidra are intentionally left for a heavier optional image.)
+`feroxbuster`, `hydra`, `whatweb`, `sqlmap`, `testssl.sh`, `curl`, `jq`,
+`binwalk`, `yara`, `radare2`, `exiftool`, `oletools`, `pdfid`/`pdf-parser`,
+`tshark`, `python3` + `requests` (and `httpx` if the Kali package is present).
+(Volatility3 + Ghidra + metasploit are intentionally left for the heavier
+optional image.)
+
+**Offensive tooling & offline nuclei templates:** the offensive tools are gated
+exactly like everything else — OS-side approval + scope-guard, egress firewall,
+and the ephemeral `--cap-drop ALL` / `--network none` / `--rm` container;
+installing them relaxes nothing. **nuclei templates are baked at build time** so
+scans work with `--network none`: they live at `$NUCLEI_TEMPLATES`
+(`/opt/nuclei-templates`); pass `-t $NUCLEI_TEMPLATES` (and `-disable-update-check`)
+when invoking nuclei offline. Smoke: `scripts/smoke_offensive.sh`.
 
 ### 2. Configure the token
 

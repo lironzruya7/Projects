@@ -4,8 +4,12 @@
 #   docker build -t sec-toolbox:latest -f docker/Dockerfile.sec-toolbox docker/
 #
 # The container runs as a NON-root user (`runner`). It carries a broad set of
-# recon / analysis / forensics tools. Heavier tools (Volatility3, Ghidra) are
-# intentionally left out — put those in a separate, larger optional image.
+# recon / analysis / forensics tools plus authorized offensive tooling (nuclei,
+# ffuf, feroxbuster, sqlmap, hydra, whatweb, ...). Installing these does NOT
+# relax any control: every run still goes through the OS approval + scope-guard,
+# the egress firewall, and the ephemeral --cap-drop ALL / --network none /
+# --rm container. Heavier tools (Volatility3, Ghidra, metasploit) live in the
+# separate optional heavy image, not here.
 #
 # Base: Kali rolling — ships ffuf, nuclei, nikto, radare2, etc. straight from
 # apt, so no separate Go-tool release downloads are needed.
@@ -32,6 +36,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         nikto \
         ffuf \
         nuclei \
+        # offensive / web (authorized use only — gated by the OS scope-guard,
+        # egress approval, egress firewall, and the ephemeral --network none
+        # container model; installing != releasing).
+        feroxbuster \
+        hydra \
+        whatweb \
+        sqlmap \
         # tls / capture
         testssl.sh \
         tshark \
@@ -44,7 +55,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3 \
         python3-pip \
         python3-venv \
-        sqlmap \
     && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
@@ -87,11 +97,45 @@ RUN set -eux; \
     pdfid --help >/dev/null 2>&1 || pdfid -h >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------------------
+# httpx (ProjectDiscovery) — best-effort: Kali packages it as `httpx-toolkit`
+# (the name varies), so a mismatch must NOT fail the image. Optional add-on.
+# ---------------------------------------------------------------------------
+RUN set -eux; \
+    apt-get update; \
+    ( apt-get install -y --no-install-recommends httpx-toolkit \
+      || apt-get install -y --no-install-recommends httpx \
+      || echo "WARNING: httpx not installed (optional)" ); \
+    rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
 # Non-root runtime user. /work is the mount point for the throwaway workdir.
 # ---------------------------------------------------------------------------
 RUN useradd --create-home --uid 1000 --shell /bin/bash runner \
     && mkdir -p /work \
     && chown runner:runner /work
+
+# ---------------------------------------------------------------------------
+# Bake nuclei templates at BUILD time (network is available here) so exec
+# containers can run fully offline (--network none). Version-agnostic: run the
+# update, then find wherever nuclei stored the templates and normalize them to
+# /opt/nuclei-templates. The build FAILS if the template set comes up empty.
+# Exposed via NUCLEI_TEMPLATES + the runner's default ~/nuclei-templates path.
+# ---------------------------------------------------------------------------
+ENV NUCLEI_TEMPLATES=/opt/nuclei-templates
+RUN set -eux; \
+    HOME=/root nuclei -update-templates -disable-update-check >/tmp/nuclei-ut.log 2>&1 \
+      || HOME=/root nuclei -update-templates >/tmp/nuclei-ut.log 2>&1 || true; \
+    src="$(find /root -maxdepth 4 -type d -name 'nuclei-templates' 2>/dev/null | head -1)"; \
+    test -n "$src"; \
+    mkdir -p /opt; cp -a "$src" /opt/nuclei-templates; \
+    [ -n "$(ls -A /opt/nuclei-templates)" ]; \
+    chown -R runner:runner /opt/nuclei-templates; \
+    mkdir -p /home/runner/.local; \
+    ln -sfn /opt/nuclei-templates /home/runner/nuclei-templates; \
+    ln -sfn /opt/nuclei-templates /home/runner/.local/nuclei-templates; \
+    chown -R runner:runner /home/runner/.local; \
+    chown -h runner:runner /home/runner/nuclei-templates; \
+    rm -rf /root/nuclei-templates /root/.config/nuclei /root/.local 2>/dev/null || true
 
 USER runner
 WORKDIR /work
