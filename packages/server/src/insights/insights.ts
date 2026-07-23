@@ -104,6 +104,33 @@ export interface Forecast {
   remainingBills: number; // known recurring charges still due before month-end
   safeToSpendTotal: number; // discretionary money left for the rest of the month
   safeToSpendPerDay: number; // that, divided across the remaining days
+  // Monte Carlo band on month-end NET (income − spend), from the spread of recent
+  // monthly spend. null if there isn't enough history to model the variance.
+  simulation: { p10: number; p50: number; p90: number; probNegativePct: number } | null;
+}
+
+// Small deterministic PRNG so the band is stable within a month (no jitter on
+// refresh) yet varies month to month.
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function seedFromMonth(ym: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < ym.length; i++) h = Math.imul(h ^ ym.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+/** One standard-normal sample (Box–Muller) from a [0,1) rng. */
+function gaussian(rng: () => number, mean: number, sd: number): number {
+  const u = Math.max(1e-9, rng());
+  const v = rng();
+  return mean + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
 /**
@@ -154,6 +181,38 @@ export function buildForecast(base: string): Forecast {
   const safeToSpendTotal = expectedMonthIncome - mtdSpend - remainingBills;
   const safeToSpendPerDay = Math.max(0, safeToSpendTotal) / daysLeftInMonth;
 
+  // Monte Carlo band: model this month's total spend as a draw from the spread of
+  // recent full months (can't be less than what's already spent), hold expected
+  // income fixed, and read off the P10/P50/P90 of month-end net + the chance it's
+  // negative. Gives a risk range instead of a single point estimate.
+  let simulation: Forecast['simulation'] = null;
+  const hist: number[] = [];
+  for (let i = 1; i <= 6; i++) {
+    const s = spendIn(addMonths(month, -i));
+    if (s > 0) hist.push(s);
+  }
+  if (hist.length >= 2) {
+    const mu = hist.reduce((s, x) => s + x, 0) / hist.length;
+    const variance = hist.reduce((s, x) => s + (x - mu) ** 2, 0) / hist.length;
+    const sd = Math.max(Math.sqrt(variance), mu * 0.08); // variance floor so it isn't degenerate
+    const rng = mulberry32(seedFromMonth(month));
+    const N = 3000;
+    const nets: number[] = [];
+    for (let i = 0; i < N; i++) {
+      const total = Math.max(mtdSpend, gaussian(rng, mu, sd)); // full-month spend ≥ already spent
+      nets.push(expectedMonthIncome - total);
+    }
+    nets.sort((a, b) => a - b);
+    const q = (p: number): number => nets[Math.min(N - 1, Math.floor(p * N))]!;
+    const probNeg = nets.filter((n) => n < 0).length / N;
+    simulation = {
+      p10: round2(q(0.1)),
+      p50: round2(q(0.5)),
+      p90: round2(q(0.9)),
+      probNegativePct: Math.round(probNeg * 100),
+    };
+  }
+
   return {
     currency: base,
     month,
@@ -169,6 +228,7 @@ export function buildForecast(base: string): Forecast {
     remainingBills: round2(remainingBills),
     safeToSpendTotal: round2(safeToSpendTotal),
     safeToSpendPerDay: round2(safeToSpendPerDay),
+    simulation,
   };
 }
 

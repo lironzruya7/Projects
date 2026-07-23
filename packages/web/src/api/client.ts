@@ -108,6 +108,7 @@ export interface Forecast {
   remainingBills: number;
   safeToSpendTotal: number;
   safeToSpendPerDay: number;
+  simulation: { p10: number; p50: number; p90: number; probNegativePct: number } | null;
 }
 
 export interface Account {

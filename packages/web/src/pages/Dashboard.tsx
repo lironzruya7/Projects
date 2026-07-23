@@ -455,8 +455,21 @@ function ForecastCard({ f, nav }: { f: Forecast; nav: (to: string) => void }): J
         <Metric label="Expected more spend" value={formatMoney(f.expectedRemaining.spend, cur)} tone="expense" />
         <Metric label="Expected more income" value={formatMoney(f.expectedRemaining.income, cur)} tone="income" />
       </div>
+      {f.simulation && (
+        <div className="mt-3 pt-3 border-t border-edge">
+          <div className="text-[11px] text-muted uppercase tracking-wide mb-1">Likely month-end net (simulated)</div>
+          <div className="tnum text-sm">
+            <span className="text-muted">P10</span> {formatMoney(f.simulation.p10, cur, { sign: true })}
+            <span className="text-muted"> · median</span> {formatMoney(f.simulation.p50, cur, { sign: true })}
+            <span className="text-muted"> · P90</span> {formatMoney(f.simulation.p90, cur, { sign: true })}
+          </div>
+          <div className={`text-xs mt-0.5 ${f.simulation.probNegativePct >= 40 ? 'text-expense' : 'text-muted'}`}>
+            {f.simulation.probNegativePct}% chance you finish the month negative
+          </div>
+        </div>
+      )}
       <div className="text-[10px] text-muted mt-2">
-        Estimate — assumes this month ends like your 3-month average. Updates as new transactions arrive.
+        Estimate — 3,000-run simulation from your recent monthly spread. Updates as new transactions arrive.
       </div>
     </Card>
   );

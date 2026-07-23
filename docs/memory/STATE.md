@@ -50,7 +50,16 @@ curl -s -H "Authorization: Bearer $FINANCE_READ_TOKEN" \
   https://srv1814608.tail7d0828.ts.net/api/export.json | head -c 400
 ```
 
+## Roadmap execution (from docs/IDEAS.md)
+- ✅ Batch 1: Safe-to-Spend + subscription price-hike/trial alerts.
+- ✅ Batch 2: curated Israeli merchant seed rules (out-of-the-box categorization).
+- ▶ Batch 3 (in progress): Monte Carlo forecast bands, cashflow calendar, budgeting/goals.
+- ⏸ Batch 4 (needs owner approval + safety review before pulling any dep): ntfy/Telegram push,
+  sqlite-vec embeddings, sharp/OCR upgrade, Ollama/vision-LLM, NL "ask your money".
+
 ## History (append newest first)
+- **2026-07-23** — Roadmap batches 1–2 shipped: Safe-to-Spend, subscription price-hike/trial
+  alerts, curated Israeli merchant seed rules. Added docs/IDEAS.md (5-agent research roadmap).
 - **2026-07-23** — 🔒 Closed a public-internet exposure of the finance app (Hostinger public
   IP, port 4000 open). Firewalled to tailscale0, `tailscale serve`, redeployed on `127.0.0.1`,
   rotated the read token. Verified closed externally (phone on cellular) + tailnet access works.
