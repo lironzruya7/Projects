@@ -1,108 +1,119 @@
-# CLAUDE.md
+# CLAUDE.md — Finance Webapp operating brief
 
-Guidance for AI agents working in this repo. Read this first; for a deeper topic-by-topic
-map see [`docs/MEMORY.md`](docs/MEMORY.md). Keep both up to date when you change things.
+Stable operating brief for every session that owns this repo. **Live state (deployed
+version, open items, rollback) is in [`docs/memory/STATE.md`](docs/memory/STATE.md)** — a
+SessionStart hook prints it at the top of each session; read it first, and update it at each
+stop-point. Deeper codebase map: [`docs/MEMORY.md`](docs/MEMORY.md).
 
-## What this is
+> This app holds the owner's REAL, most-sensitive financial data. **Confidentiality is the
+> top priority — non-negotiable.**
 
-A **local-first personal finance aggregator**. It merges transactions from bank/card
-exports (CSV/Excel/PDF), PayPal activity exports, direct bank scraping, and email
-receipts into one deduplicated, categorized ledger with a dashboard, insights, and a
-month-end forecast. Single-user, no login, runs on a VPS reached over Tailscale. Default
-currency **ILS**, full **Hebrew/RTL**. Tuned for Bank Yahav, Isracard, Cal, Diners, PayPal.
+## Role & boundaries
+- You own **ONLY** this finance webapp repo (the self-hosted cashflow tracker on
+  `srv1814608`).
+- You do **NOT** touch other repos — the **Claude OS** assistant (which reads your export),
+  the **cyber** analysis VPS, and the **poker** repo are owned by other sessions. You receive
+  **specs** relayed by the owner from the OS session, implement them here, and report back.
+- When a spec would trade the owner's privacy for convenience, **push back to the owner**
+  instead of implementing it.
 
-## Monorepo layout
+## What this app is
+A self-hosted personal **cashflow / income-expense tracker** (TypeScript monorepo). It
+ingests the owner's financial data — bank exports, ~4 credit cards, PayPal, invoices that
+arrive by email, and direct bank sync — merges it into one deduplicated, categorized ledger,
+and serves a dashboard + insights + a month-end forecast. Default currency **ILS**, full
+Hebrew/RTL. Bound to **127.0.0.1**, reachable ONLY over the tailnet via `tailscale serve`
+HTTPS (`https://srv1814608.tail7d0828.ts.net`) — **never public.**
 
-npm workspaces. Node ≥20, TypeScript strict, ESM everywhere.
+## The contract with the Claude OS assistant
+Do not break this without agreeing via owner → OS.
+- `GET /api/export.json` with a bearer token (`FINANCE_READ_TOKEN`) → the income/expense JSON
+  the OS's `finance_report` tool reads. Route: `routes/agentExport.ts`; builder:
+  `insights/agentExport.ts`.
+- Data is **transaction-based** (no bank balances / positions). `net_worth`, account balances
+  and `history` are **cumulative-cashflow derivations** — flagged in `meta.notes` +
+  `meta.derived` so the assistant never presents them as a real bank balance.
+- Keep the export **shape stable**: `meta, net_worth, accounts, transactions, positions,
+  recurring, budgets, debts, history`. A breaking change silently breaks the assistant's
+  finance answers. Adding fields is fine; renaming/removing is not.
 
-- `packages/server` — `@finance/server`: Fastify v5 + better-sqlite3 + Zod.
-- `packages/web` — `@finance/web`: React + Vite + Tailwind + Recharts.
+## Security model (financial PII — top priority)
+- **Never expose publicly.** Stay bound to `127.0.0.1` (the default); reach only over the
+  tailnet via `tailscale serve`. No public port. Only set `HOST=0.0.0.0` **with** a tailnet
+  firewall (`ufw allow in on tailscale0 to any port 4000`) — and only `/api/export.json` is
+  token-guarded, the rest of the API is not.
+- **The read token is the auth** — keep `FINANCE_READ_TOKEN` in `.env` on the box only, rotate
+  on leak. No third-party logging/telemetry of transactions.
+- **Untrusted import parsing is the real attack surface** — Excel/CSV imports and, especially,
+  invoices arriving by email. Parse defensively: patched deps, size caps, shape validation,
+  never execute anything on parse.
+  - Status: Excel uses **`@e965/xlsx`** (patched SheetJS 0.20.x), NOT `xlsx@0.18.5`.
+    `tabular.ts` caps size (25 MB) + rows (200k). **Email attachments never reach the Excel
+    parser** — `email/scan.ts` → `parsers/receiptFile.ts` does PDF-text + OCR only.
+- **Secrets only on the box** (`.env`) — never in chat, commits, or the repo. Bank creds +
+  OAuth tokens are encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set. Only normalized
+  merchant names go to the optional LLM — never amounts or statements.
+
+## How you work (discipline)
+1. **Verify, don't assume** — test actual behaviour/data; a green build ≠ correct numbers.
+2. **Smoke/test before "done"** — run it live; confirm the export still parses and the figures
+   are right after a change.
+3. **Secret hygiene** — never echo the token or full financial rows into chat or commits.
+4. **Commit + push discipline** — clear messages, work on a branch.
+5. **Plain-language reporting** — what changed, why, effect on the data/answers; concise.
+6. **State discipline** — keep `docs/memory/STATE.md` current at each stop-point; append history.
+7. **Defensive-first** for anything touching money or untrusted input — validate, cap, patch;
+   when in doubt, fail safe.
+
+---
+
+# Technical guide
+
+## Monorepo
+npm workspaces, Node ≥20, TypeScript strict, ESM. `packages/server` (`@finance/server`:
+Fastify v5 + better-sqlite3 + Zod) and `packages/web` (`@finance/web`: React + Vite + Tailwind
++ Recharts).
 
 ## Commands
-
 ```bash
-npm run dev         # server (:4000) + web (:5173) with hot reload
-npm run build       # typecheck + build both packages (server dist + web dist)
-npm run typecheck   # both packages
+npm run dev         # server (:4000) + web (:5173), hot reload
+npm run build       # typecheck + build both packages
+npm run typecheck   # both packages (this is the lint gate — no eslint)
 npm test            # server unit tests (node --test)
 ```
-
-- Web-only typecheck (faster while iterating on UI):
-  `npx tsc -p packages/web/tsconfig.json --noEmit`
-- Production (`npm run start`) serves the built web **and** the API on one port (4000).
-- **Always run `npm run typecheck` (and `npm run build`) before committing.** The web
-  build is Vite; a passing typecheck does not guarantee a passing build.
+Web-only typecheck: `npx tsc -p packages/web/tsconfig.json --noEmit`. Production
+(`npm run start`) serves web + API on one port (4000). **Run `npm run typecheck` and
+`npm run build` before committing** — a passing typecheck doesn't guarantee a passing Vite build.
 
 ## Architecture (data flow)
-
 ```
 import/scrape/email → parsers → Zod (models/types.ts ParsedTransaction) → repo/transactions
-      → runDedup() [dedup/engine.ts]:
-           • union-find merge of cross-source duplicates
-           • same-source repeats → double-charge alerts
-           • category detectors: settlement→Transfers, salary→Salary, living-cost→Cost of Living
-      → insights/reconcile read the deduped ledger for the dashboard, forecast, reports
+   → runDedup() [dedup/engine.ts]: union-find cross-source merge; same-source → alerts;
+     category detectors (settlement→Transfers, salary→Salary, living-cost→Cost of Living)
+   → insights/reconcile read the deduped ledger for dashboard, forecast, reports, export
 ```
+Zod is the boundary — malformed rows are "skipped with a reason", never dropped. A
+`LedgerEntry` is a primary transaction plus its merged sources; totals use primaries only.
 
-- **Zod is the boundary.** Every parser returns `ParsedTransaction`; malformed rows are
-  surfaced as "skipped with a reason", never silently dropped.
-- **Ledger entry vs transaction:** a `LedgerEntry` is a primary transaction plus its merged
-  sources. Totals use primaries only (`merged_into IS NULL`).
+## Conventions & gotchas
+- **DB migrations are additive** in `db/db.ts` `migrate()` (guarded `ALTER TABLE ADD COLUMN`);
+  `schema.sql` won't add columns to an existing table. Built-in categories/settings re-seed on
+  boot.
+- **Transfers excluded from spend/income totals** everywhere (internal movement); a positive
+  **card** amount is a refund, not income. **Loan In / Loan Repayment** DO count but are flagged.
+- **Salary date snapping:** salary in the last ~2 days of a month counts to the next month.
+- **PayPal exports** are multi-row per purchase — `parsers/paypal.ts` collapses each to one ILS
+  outflow. Don't run PayPal through the generic mapper.
+- **Web theming:** CSS variables in `index.css` mapped to Tailwind tokens (`bg-panel`, …);
+  light default, dark via `data-theme` (`lib/theme.ts`). Money `.tnum`; expenses `.text-expense`
+  (red `-`), income `.text-income` (green `+`). Never set inline `style={{ background }}` on a
+  card — it overrides `bg-panel`; use `backgroundImage` for tints. Charts read theme colors via
+  `useChartColors()` / `rgb(var(--…))`.
+- **RTL** text inside the LTR shell: wrap in `<Bidi>` / `.rtl-aware`.
 
-## Conventions & gotchas (learned the hard way)
-
-- **DB migrations are additive** in `db/db.ts` `migrate()` (guarded `ALTER TABLE ADD
-  COLUMN`). `schema.sql`'s `CREATE TABLE IF NOT EXISTS` will NOT add columns to an existing
-  table — add them in `migrate()`. Built-in categories/settings are (re)seeded idempotently
-  on every boot, so new built-in categories appear after a restart.
-- **Transfers are excluded from spend/income totals** everywhere (internal money movement;
-  avoids double-counting a bank settlement against the itemized card charges). A positive
-  **card** amount is a refund, not income — also excluded. See `insights.ts` isExpense/isIncome.
-- **Loan In / Loan Repayment** categories DO count in totals (unlike Transfers) but are
-  flagged as loans in the UI.
-- **Salary date snapping:** a salary in the last ~2 days of a month counts toward the next
-  month (`reconcile.ts` / `effectiveMonth`).
-- **PayPal exports** are multi-row per purchase (payment + card-funding + FX conversion that
-  net to zero). `parsers/paypal.ts` collapses each purchase to ONE ILS outflow (the
-  card-funding amount) so it reconciles with the card statement. Do NOT run PayPal through
-  the generic column mapper.
-- **Excel parsing uses `@e965/xlsx`** (npm-native patched SheetJS 0.20.x), NOT `xlsx@0.18.5`
-  (frozen with prototype-pollution + ReDoS advisories, no npm fix). `tabular.ts` also caps
-  file size (25 MB) and rows (200k). Email attachments never hit this parser (PDF/OCR only).
-- **Web theming:** all surface/text colors are CSS variables in `index.css` mapped into
-  Tailwind tokens (`bg-panel`, `text-ink`, …). Light is the default, dark via `data-theme`
-  on `<html>` (`lib/theme.ts`). Money uses `.tnum` (tabular figures); expenses `.text-expense`
-  (red, `-`), income `.text-income` (green, `+`).
-  - **Do not set an inline `style={{ background: … }}` on a card** — it overrides the solid
-    `bg-panel` fill and the card blends into the page. Use `backgroundImage` for tint overlays.
-- **Chart colors must be theme-aware:** tooltips use `rgb(var(--…))` (resolve in the DOM);
-  axis/grid strokes are read from CSS vars via `useChartColors()` in `Dashboard.tsx`.
-- **RTL text** inside an LTR shell: wrap user strings in `<Bidi>` / `.rtl-aware`.
-
-## Security
-
-- The app has **no auth**. Never expose it to the public internet — Tailscale only.
-- `GET /api/export.json` is the ONLY token-gated route (`FINANCE_READ_TOKEN`, constant-time
-  compare, 401 on failure). `HOST` defaults to `127.0.0.1` (local-only, PII-safe); `tailscale
-  serve` reaches it. Binding `HOST=0.0.0.0` exposes the rest of the API unauthenticated and
-  must NOT be used without a tailnet firewall.
-- Bank credentials + OAuth tokens are encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
-- Only normalized merchant names go to the optional LLM — never amounts or statements.
-
-## Deploy (Hostinger VPS at `/root/finance`, reached over Tailscale)
-
+## Deploy (Hostinger VPS `/root/finance`, over Tailscale)
 ```bash
 cd /root/finance && git pull && npm install && npm run build && pm2 restart finance --update-env
 ```
-
-The direct-scraper needs a headless Chromium with an X server: a persistent `Xvfb :99` and
-`DISPLAY=:99` in pm2's env (`PUPPETEER_EXECUTABLE_PATH` points at the system Chromium). After
-a UI change, hard-refresh the browser to pick up new CSS.
-
-## Working style in this repo
-
-- Develop on the designated feature branch; commit with clear messages and push.
-- Verify UI changes visually when practical (build → serve `packages/web/dist` → screenshot
-  with the preinstalled Chromium via Playwright at `/opt/pw-browsers/chromium`; a tiny mock
-  server can stand in for the API — see the scratchpad pattern used in history).
-- Don't commit screenshots or scratch files into the repo.
+The direct-scraper needs a headless Chromium + persistent `Xvfb :99` (`DISPLAY=:99` in pm2 env).
+Hard-refresh the browser after a UI change.
