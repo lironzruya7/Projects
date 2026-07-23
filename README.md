@@ -28,8 +28,11 @@ tailnet client ──HTTPS──▶ tailscale serve :443 ──▶ 127.0.0.1:800
 | `docker/Dockerfile.sec-toolbox` | The lean default `sec-toolbox:latest` image |
 | `docker/Dockerfile.heavy` | Reserved, opt-in `sec-toolbox-heavy:latest` (Ghidra/Volatility3/…) |
 | `deploy/cyber-exec.service` | systemd unit |
-| `deploy/egress-firewall.sh` | Host firewall: restrict egress-mode to internet-only |
+| `deploy/egress-firewall.sh` | Host firewall: restrict egress-mode to internet-only (+ optional VPN kill-switch) |
 | `deploy/egress-firewall.service` | Boot unit that re-applies the egress firewall |
+| `deploy/wg0.conf.example` | WireGuard template to route egress via iVPN (no default-route takeover) |
+| `deploy/vpn-egress.sh` | Bring egress out through iVPN, fail-closed (install/dry-run/up/down/status) |
+| `scripts/smoke_vpn.sh` | Smoke test for VPN egress (exit IP, kill-switch, isolation, Tailscale intact) |
 | `scripts/smoke_test.sh` | End-to-end smoke test (base) |
 | `scripts/smoke_heavy.sh` | Smoke test for the heavy image |
 | `scripts/smoke_offensive.sh` | Smoke test for the offensive tooling (base) |
@@ -265,6 +268,44 @@ CYBER_EXEC_TOKEN=... ./scripts/smoke_heavy.sh [base_url] [linux_dump_path]
 Covers: (a) `analyzeHeadless` decompiles a small binary → pseudo-C; (b) `vol -h`
 (+ `linux.pslist` on a provided dump); (c) re-confirms non-root, `--network
 none`, and no network reachable.
+
+## VPN egress via iVPN (optional OPSEC)
+
+Route **only** the egress network (`172.31.255.0/24`) out through iVPN
+(WireGuard) so authorized scans exit from the VPN IP, not the VPS's real IP.
+**This is OPSEC, not authorization** — the OS-side scope-guard and
+authorization-first are unchanged; a VPN never permits an unauthorized target.
+Everything is **off by default**; enabling it is a deliberate step.
+
+Key properties (see `deploy/wg0.conf.example` + `deploy/vpn-egress.sh`):
+
+- **No default-route takeover.** WireGuard's `0.0.0.0/0` goes into a **custom
+  table (51820)**; a source `ip rule` (`from 172.31.255.0/24`, pref 1000) makes
+  only the egress subnet use it. The host's own traffic — **Tailscale, image
+  pulls, and the OS → `/api/exec` path** — stays on the main route. This is what
+  keeps Tailscale from breaking.
+- **Fail-closed kill-switch.** `EGRESS_VPN=1` adds a `DOCKER-USER` rule dropping
+  any egress-subnet packet not leaving via `wg0` — tunnel down ⇒ **zero egress,
+  no leak to the real IP**. It lives in the firewall (persisted via the boot
+  unit + `/etc/cyber-exec/egress.env`), **not** in `wg-quick` PostDown, so it
+  survives the tunnel going down.
+- **DNS through the tunnel.** Egress containers use `--dns` (set
+  `SEC_TOOLBOX_EGRESS_DNS=1.1.1.1`) instead of the host-forwarded embedded
+  resolver, so DNS doesn't leak. No `DNS=` in `wg0.conf` (that would rewrite the
+  host resolver).
+- The existing destination DROPs (tailnet / RFC1918 / metadata / MagicDNS) stay
+  and still apply — a container cannot reach the tailnet, VPN or not.
+
+Bring-up (scaffolding first, real iVPN keys last):
+
+```bash
+sudo ./deploy/vpn-egress.sh install     # wireguard-tools (no keys)
+sudo ./deploy/vpn-egress.sh dry-run     # validate ip-rule + kill-switch (no keys, non-mutating)
+# owner: put real iVPN config at /etc/wireguard/wg0.conf (see wg0.conf.example),
+# and set SEC_TOOLBOX_EGRESS_DNS=1.1.1.1 in .env, then restart the service
+sudo ./deploy/vpn-egress.sh up          # tunnel up + kill-switch on
+CYBER_EXEC_TOKEN=... sudo -E ./scripts/smoke_vpn.sh
+```
 
 ## Workdir root & `files`
 

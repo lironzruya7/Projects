@@ -1,0 +1,41 @@
+# /etc/wireguard/wg0.conf — route ONLY the cyber-exec egress docker network
+# (172.31.255.0/24) out through iVPN (WireGuard). OPSEC only: this changes which
+# IP authorized scans exit from; it does NOT grant any authorization — the OS
+# scope-guard + authorization-first are unchanged.
+#
+# CRITICAL: this uses a CUSTOM routing table (51820) + a source `ip rule`, so it
+# NEVER takes the host default route. That is what keeps Tailscale and the
+# OS -> /api/exec path working. Do NOT set `Table = auto` and do NOT add a
+# plain `AllowedIPs = 0.0.0.0/0` route into the main table.
+#
+# The owner fills in the <...> values from their iVPN WireGuard config. Until
+# then this is a PLACEHOLDER for building/validating the scaffolding.
+
+[Interface]
+# --- from iVPN (owner) ---
+PrivateKey = <OWNER_PRIVATE_KEY_FROM_IVPN>
+Address    = <OWNER_TUNNEL_ADDRESS_FROM_IVPN>   # e.g. 172.20.0.2/32
+# --- routing scaffolding (do NOT change) ---
+Table      = 51820                              # custom table; never main/default
+# No `DNS =` here on purpose — it would rewrite the HOST /etc/resolv.conf and can
+# break docker/host DNS. Egress containers get DNS via `docker --dns` instead
+# (set SEC_TOOLBOX_EGRESS_DNS in the app .env), routed through the tunnel.
+PostUp   = ip rule add pref 1000 from 172.31.255.0/24 lookup 51820
+PostUp   = iptables -t nat -A POSTROUTING -s 172.31.255.0/24 -o %i -j MASQUERADE
+PostDown = ip rule del pref 1000 from 172.31.255.0/24 lookup 51820
+PostDown = iptables -t nat -D POSTROUTING -s 172.31.255.0/24 -o %i -j MASQUERADE
+
+[Peer]
+# --- from iVPN (owner) ---
+PublicKey  = <IVPN_SERVER_PUBLIC_KEY>
+Endpoint   = <IVPN_SERVER_IP>:<PORT>
+AllowedIPs = 0.0.0.0/0, ::/0                     # goes into table 51820, not main
+PersistentKeepalive = 25
+
+# Notes:
+# * `%i` expands to the interface name (wg0), so these directives are copy-safe.
+# * The `ip rule` gets pref 1000 (below Tailscale's ~5210) and is source-matched
+#   to 172.31.255.0/24, so it only ever touches egress-container traffic.
+# * The kill-switch that makes this fail-closed lives in DOCKER-USER (managed by
+#   egress-firewall.sh with EGRESS_VPN=1), NOT here — it must persist even when
+#   this tunnel is down.

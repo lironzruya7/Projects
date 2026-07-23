@@ -21,6 +21,9 @@ PartOf=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# Optional env file (written by vpn-egress.sh): carries EGRESS_VPN / WG_IFACE /
+# EGRESS_SUBNET so the VPN kill-switch is re-applied on every boot/docker-restart.
+EnvironmentFile=-/etc/cyber-exec/egress.env
 ExecStart=/opt/cyber-exec/deploy/egress-firewall.sh install
 ExecStop=/opt/cyber-exec/deploy/egress-firewall.sh remove
 

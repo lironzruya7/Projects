@@ -99,6 +99,12 @@ VOL_SYMBOL_MOUNT = "/opt/vol-symbols"
 # The subnet here MUST match deploy/egress-firewall.sh's EGRESS_SUBNET.
 EGRESS_NETWORK = os.environ.get("SEC_TOOLBOX_EGRESS_NETWORK", "cyberexec-egress")
 EGRESS_SUBNET = os.environ.get("SEC_TOOLBOX_EGRESS_SUBNET", "172.31.255.0/24")
+# Optional explicit DNS for egress containers. REQUIRED when routing egress
+# through the VPN (WireGuard): the embedded docker resolver forwards DNS from
+# the HOST, which would leak out the host's real route — a direct `--dns` from
+# the container instead follows the egress subnet's policy route (the tunnel).
+# Empty (default) keeps the current embedded-resolver behavior unchanged.
+EGRESS_DNS = os.environ.get("SEC_TOOLBOX_EGRESS_DNS", "").strip()
 
 # Upper sanity bound for any timeout before per-image capping (== max heavy cap).
 MAX_TIMEOUT_HARD = 1800
@@ -372,6 +378,10 @@ def run_command(req: ExecRequest) -> ExecResponse:
         ]
         if raw_granted:
             argv += ["--cap-add", "NET_RAW"]
+        # Explicit DNS for egress containers (e.g. through the VPN tunnel) so
+        # resolution follows the egress policy route instead of the host's.
+        if req.network == "egress" and EGRESS_DNS:
+            argv += ["--dns", EGRESS_DNS]
         argv += [
             "--security-opt", "no-new-privileges",
             "--pids-limit", PIDS_LIMIT,

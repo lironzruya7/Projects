@@ -14,6 +14,10 @@
 #
 #   sudo ./deploy/egress-firewall.sh install|remove|status
 #
+# VPN kill-switch: set EGRESS_VPN=1 (usually via /etc/cyber-exec/egress.env,
+# managed by deploy/vpn-egress.sh) to additionally drop any egress-subnet packet
+# not leaving via $WG_IFACE — fail-closed VPN egress. Default off.
+#
 # EGRESS_SUBNET MUST match the app's SEC_TOOLBOX_EGRESS_SUBNET.
 # Persistence: rules do not survive reboot / docker restart — use
 # deploy/egress-firewall.service (PartOf=docker.service) to re-apply them.
@@ -22,6 +26,15 @@ set -euo pipefail
 CHAIN="DOCKER-USER"
 MARK="cyber-exec-egress"
 EGRESS_SUBNET="${EGRESS_SUBNET:-172.31.255.0/24}"
+
+# VPN kill-switch (fail-closed). When EGRESS_VPN=1, egress-subnet traffic is
+# ALLOWED only if it leaves via the WireGuard interface ($WG_IFACE); anything
+# else is dropped — so if the tunnel is down there is ZERO egress (no leak to
+# the real IP), never a fallback. This rule is deliberately independent of the
+# wg0 interface lifecycle (NOT in wg-quick PostDown) so it survives the tunnel
+# going down. Default off, so pushing this changes nothing until you enable it.
+EGRESS_VPN="${EGRESS_VPN:-0}"
+WG_IFACE="${WG_IFACE:-wg0}"
 
 # Destinations an egress container must NOT reach (private / tailnet / metadata).
 V4_BLOCK=(
@@ -40,6 +53,22 @@ RAW_BLOCK=("100.64.0.0/10")
 
 drop_args() { echo -s "$EGRESS_SUBNET" -d "$1" -j DROP -m comment --comment "$MARK"; }
 raw_args()  { echo -s "$EGRESS_SUBNET" -d "$1" -j DROP -m comment --comment "$MARK-hostlocal"; }
+# Kill-switch: drop egress-subnet packets NOT leaving via the WG interface.
+# (Return traffic has source=internet, so it never matches -s $EGRESS_SUBNET.)
+ks_args()   { echo -s "$EGRESS_SUBNET" ! -o "$WG_IFACE" -j DROP -m comment --comment "$MARK-killswitch"; }
+
+ks_add() {
+  if ! iptables -C "$CHAIN" $(ks_args) 2>/dev/null; then
+    iptables -I "$CHAIN" $(ks_args); echo "  KILL-SWITCH: DROP $EGRESS_SUBNET not via $WG_IFACE (fail-closed)"
+  else
+    echo "  kill-switch already present"
+  fi
+}
+ks_del() {
+  while iptables -C "$CHAIN" $(ks_args) 2>/dev/null; do
+    iptables -D "$CHAIN" $(ks_args); echo "  removed kill-switch ($WG_IFACE)"
+  done
+}
 
 ensure_chain() {
   if ! iptables -n -L "$CHAIN" >/dev/null 2>&1; then
@@ -65,6 +94,8 @@ install_all() {
       echo "  raw already present -> $net"
     fi
   done
+  # VPN kill-switch: add when enabled, remove when disabled (idempotent toggle).
+  if [ "$EGRESS_VPN" = "1" ]; then ks_add; else ks_del; fi
 }
 
 remove_all() {
@@ -79,6 +110,7 @@ remove_all() {
       iptables -t raw -D PREROUTING $(raw_args "$net"); echo "  removed raw/PREROUTING -> $net"
     done
   done
+  ks_del
 }
 
 case "${1:-install}" in
@@ -97,6 +129,8 @@ case "${1:-install}" in
     iptables -n -v -L "$CHAIN" --line-numbers | grep -E "pkts|$MARK" || true
     echo "=== raw/PREROUTING (host-local tailnet) ==="
     iptables -t raw -n -v -L PREROUTING --line-numbers | grep -E "pkts|$MARK-hostlocal" || true
+    echo "=== VPN kill-switch (EGRESS_VPN=$EGRESS_VPN, iface $WG_IFACE) ==="
+    iptables -n -v -L "$CHAIN" --line-numbers | grep -E "pkts|$MARK-killswitch" || echo "  (not installed)"
     ;;
   *)
     echo "usage: $0 {install|remove|status}" >&2; exit 2 ;;
