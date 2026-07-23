@@ -134,6 +134,21 @@ export interface RecurringItem {
   isNew: boolean;
 }
 
+export interface UpcomingBill {
+  date: string;
+  merchant: string;
+  amount: number;
+  category: string | null;
+  balanceAfter: number | null;
+}
+export interface UpcomingReport {
+  currency: string;
+  items: UpcomingBill[];
+  total: number;
+  startingBalance: number | null;
+  lowPoint: { date: string; balance: number } | null;
+}
+
 export interface Anomaly {
   type: 'spike' | 'new_merchant' | 'double_charge';
   transactionId?: string;
@@ -359,6 +374,7 @@ export const api = {
     return req<DashboardSummary>(`/api/dashboard?${qs.toString()}`);
   },
   recurring: () => req<{ recurring: RecurringItem[] }>('/api/insights/recurring'),
+  upcoming: () => req<UpcomingReport>('/api/insights/upcoming'),
   anomalies: () => req<{ anomalies: Anomaly[] }>('/api/insights/anomalies'),
   recommendations: () => req<RecommendationReport>('/api/insights/recommendations'),
   accounts: () => req<{ accounts: Account[] }>('/api/accounts'),

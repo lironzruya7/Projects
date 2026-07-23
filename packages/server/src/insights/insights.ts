@@ -236,6 +236,63 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+export interface UpcomingBill {
+  date: string;
+  merchant: string;
+  amount: number;
+  category: string | null;
+  balanceAfter: number | null; // projected balance right after this charge (null if no synced balance)
+}
+export interface UpcomingReport {
+  currency: string;
+  items: UpcomingBill[];
+  total: number;
+  startingBalance: number | null;
+  lowPoint: { date: string; balance: number } | null; // the tightest projected day
+}
+
+/**
+ * A short-horizon cashflow calendar: the known recurring charges due in the next
+ * `days`, in date order, with a running projected balance so you can see the
+ * "tight" day before the next paycheck. Balance projection only when a bank sync
+ * has captured a current balance.
+ */
+export function buildUpcoming(days = 45): UpcomingReport {
+  const base = getSetting<string>('currency', 'ILS');
+  const today = new Date().toISOString().slice(0, 10);
+  const horizon = new Date(Date.now() + days * MS_DAY).toISOString().slice(0, 10);
+  const bills = detectRecurring()
+    .filter((r) => r.currency === base && r.nextExpected >= today && r.nextExpected <= horizon)
+    .sort((a, b) => a.nextExpected.localeCompare(b.nextExpected));
+
+  const balances = getBankBalances().filter((b) => b.currency === base);
+  let running: number | null = balances.length ? balances.reduce((s, b) => s + b.balance, 0) : null;
+  const startingBalance = running;
+  let lowPoint = running != null ? { date: today, balance: round2(running) } : null;
+
+  const items: UpcomingBill[] = bills.map((r) => {
+    if (running != null) {
+      running -= r.currentAmount;
+      if (!lowPoint || running < lowPoint.balance) lowPoint = { date: r.nextExpected, balance: round2(running) };
+    }
+    return {
+      date: r.nextExpected,
+      merchant: r.merchant,
+      amount: round2(r.currentAmount),
+      category: r.category,
+      balanceAfter: running != null ? round2(running) : null,
+    };
+  });
+
+  return {
+    currency: base,
+    items,
+    total: round2(bills.reduce((s, r) => s + r.currentAmount, 0)),
+    startingBalance: startingBalance != null ? round2(startingBalance) : null,
+    lowPoint,
+  };
+}
+
 /** Earliest and latest month present in the ledger (for the month picker). */
 function monthRange(txns: Transaction[], fallback: string): { min: string; max: string } {
   let min = '';

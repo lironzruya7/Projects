@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Anomaly, RecommendationReport, RecurringItem } from '../api/client';
+import type { Anomaly, RecommendationReport, RecurringItem, UpcomingReport } from '../api/client';
 import { api } from '../api/client';
 import { Bidi, Card, Skeleton, StatCard } from '../components/ui';
 import { categoryColor } from '../lib/colors';
@@ -18,14 +18,16 @@ export function Insights(): JSX.Element {
   const [recurring, setRecurring] = useState<RecurringItem[]>([]);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [rec, setRec] = useState<RecommendationReport | null>(null);
+  const [upcoming, setUpcoming] = useState<UpcomingReport | null>(null);
   const [loading, setLoading] = useState(true);
   const nav = useNavigate();
 
   useEffect(() => {
-    Promise.all([api.recurring(), api.anomalies(), api.recommendations()]).then(([r, a, rc]) => {
+    Promise.all([api.recurring(), api.anomalies(), api.recommendations(), api.upcoming()]).then(([r, a, rc, up]) => {
       setRecurring(r.recurring);
       setAnomalies(a.anomalies);
       setRec(rc);
+      setUpcoming(up);
       setLoading(false);
     });
   }, []);
@@ -39,6 +41,47 @@ export function Insights(): JSX.Element {
   return (
     <div className="space-y-4">
       <h1 className="hidden md:block text-2xl font-semibold">Insights & recommendations</h1>
+
+      {upcoming && upcoming.items.length > 0 && (
+        <Card>
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="font-medium">📅 Upcoming bills</h3>
+            <span className="tnum text-sm text-muted">{formatMoney(upcoming.total, upcoming.currency)} in ~6 weeks</span>
+          </div>
+          {upcoming.lowPoint && upcoming.startingBalance != null && (
+            <p className={`text-xs mb-2 ${upcoming.lowPoint.balance < 0 ? 'text-expense' : 'text-muted'}`}>
+              Tightest day: {formatDate(upcoming.lowPoint.date)} → projected balance{' '}
+              <span className="tnum font-medium">{formatMoney(upcoming.lowPoint.balance, upcoming.currency)}</span>
+            </p>
+          )}
+          <div className="divide-y divide-edge/40">
+            {upcoming.items.map((b, i) => {
+              const color = categoryColor(b.category);
+              return (
+                <button
+                  key={i}
+                  onClick={() => nav(`/transactions?merchant=${encodeURIComponent(b.merchant)}`)}
+                  className="w-full flex items-center gap-3 py-2 text-left active:scale-[0.997] transition-transform"
+                >
+                  <span className="w-1.5 h-8 rounded-full shrink-0" style={{ background: color }} />
+                  <div className="flex-1 min-w-0">
+                    <Bidi className="text-sm font-medium truncate block">{b.merchant}</Bidi>
+                    <div className="text-xs text-muted">{formatDate(b.date)}{b.category ? ` · ${b.category}` : ''}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="tnum text-sm font-semibold text-expense">-{formatMoney(b.amount, upcoming.currency)}</div>
+                    {b.balanceAfter != null && (
+                      <div className={`tnum text-[10px] ${b.balanceAfter < 0 ? 'text-expense' : 'text-muted'}`}>
+                        → {formatMoney(b.balanceAfter, upcoming.currency)}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {rec && (
         <>
