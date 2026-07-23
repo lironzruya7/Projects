@@ -18,9 +18,10 @@ Update at each stop-point; add new entries at the top of History, don't rewrite.
 - All smoke/verify scripts passing live.
 
 ## Repo state
-- Working branch: `claude/hardened-exec-agent-8a3obd`.
-- Docs commit (CLAUDE.md + reorganized README + this STATE.md + SessionStart
-  hook) is on the branch, **ahead of merged `main`** — open a PR to merge if wanted.
+- **main @ `f6f1647`** — full hardened system + auto-loaded docs (CLAUDE.md,
+  README, this STATE.md, SessionStart hook) all merged. Nothing pending.
+- Working branch: `claude/hardened-exec-agent-8a3obd` (restart from `origin/main`
+  for follow-up work).
 
 ## Open / future (do ONLY if the owner relays a spec)
 - **Volatility3 symbol-seed** — populate a matching Linux ISF into a cache
@@ -36,7 +37,9 @@ Update at each stop-point; add new entries at the top of History, don't rewrite.
   `/etc/wireguard/wg0.conf`).
 
 ## History (newest first)
+- **PR #2 merged → `main @ f6f1647`**: docs installed as auto-loaded memory —
+  stable CLAUDE.md operating brief, live docs/memory/STATE.md, SessionStart hook
+  (Option B), reorganized README. Docs-only, no code/deploy change.
 - **PR #1 merged → `main @ d5b23cb`**: full hardened cyber-exec system built and
   smoked live (service, base+heavy images, offensive tooling, egress firewall,
-  iVPN VPN egress with MTU-black-hole fix). Then docs (CLAUDE.md, README, this
-  STATE.md, SessionStart hook) added on the working branch.
+  iVPN VPN egress with MTU-black-hole fix).
