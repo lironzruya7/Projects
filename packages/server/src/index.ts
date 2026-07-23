@@ -6,6 +6,8 @@ import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import { config } from './config.js';
 import { getDb } from './db/db.js';
+import { seedCategoryRules } from './categorize/seedRules.js';
+import { recategorizeAll } from './repo/transactions.js';
 import { importRoutes } from './routes/import.js';
 import { transactionRoutes } from './routes/transactions.js';
 import { categoryRoutes } from './routes/categories.js';
@@ -31,6 +33,18 @@ async function main(): Promise<void> {
 
   // Initialize DB (creates file + schema + seed) before serving.
   getDb();
+
+  // Seed curated merchant→category starter rules; if any were newly added, apply
+  // them to existing rule/uncategorized rows (never touches manual/LLM categories).
+  try {
+    const added = seedCategoryRules();
+    if (added > 0) {
+      const changed = recategorizeAll();
+      console.log(`[seed] added ${added} merchant rules; recategorized ${changed} transactions.`);
+    }
+  } catch (err) {
+    console.error('[seed] failed:', err instanceof Error ? err.message : err);
+  }
 
   const app = Fastify({ logger: { level: 'info', transport: undefined } });
 
