@@ -23,6 +23,13 @@ Update at each stop-point; add new entries at the top of History, don't rewrite.
 - Working branch: `claude/hardened-exec-agent-8a3obd` (restart from `origin/main`
   for follow-up work).
 
+## Host access
+- SSH currently over the **public Hostinger IP**. `deploy/lockdown-ssh.sh` is
+  available to restrict SSH to the tailnet (drop public TCP 22) with a safe
+  pre-check + dead-man's-switch. **Not yet applied** — owner to run when ready
+  (keep Hostinger console open; disable Tailscale key expiry first).
+- `/api/exec` is already tailnet-only (loopback + `tailscale serve`).
+
 ## Open / future (do ONLY if the owner relays a spec)
 - **Volatility3 symbol-seed** — populate a matching Linux ISF into a cache
   OFFLINE (analysis runs `network=none`, can't fetch live). Not started.
@@ -37,6 +44,8 @@ Update at each stop-point; add new entries at the top of History, don't rewrite.
   `/etc/wireguard/wg0.conf`).
 
 ## History (newest first)
+- **SSH lockdown script added** (`deploy/lockdown-ssh.sh`): tailnet-only SSH with
+  safe pre-check + dead-man's-switch. Not yet applied on the box.
 - **PR #2 merged → `main @ f6f1647`**: docs installed as auto-loaded memory —
   stable CLAUDE.md operating brief, live docs/memory/STATE.md, SessionStart hook
   (Option B), reorganized README. Docs-only, no code/deploy change.
