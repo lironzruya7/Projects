@@ -1,16 +1,20 @@
 # Finance Aggregator
 
-A **local-first** personal finance app that pulls spending data from three sources —
-**email receipts/invoices** (incl. attachments), **bank exports**, and **credit-card
-exports** — merges them into one clean transaction ledger, auto-categorizes everything,
-collapses duplicate charges that appear across files, and shows a dashboard with insights.
+A **local-first** personal finance app that pulls spending data from several sources —
+**email receipts/invoices** (Gmail + Outlook, incl. attachments), **bank & credit-card
+exports** (CSV/Excel/PDF), **PayPal activity exports**, and **direct bank scraping** —
+merges them into one clean transaction ledger, auto-categorizes everything, **cross-checks
+the same purchase across sources** so nothing is double-counted, and shows a dashboard with
+insights, a current balance, and a month-end forecast.
 
 Everything runs on your machine. Data lives in a local SQLite file. The only outbound
-calls are to Gmail (read-only, if you connect it) and — only if you explicitly enable it —
-the Anthropic API for categorizing unknown merchant names.
+calls are to your mailbox (read-only, if you connect it), your bank (direct sync, if you
+enable it), and — only if you explicitly enable it — the Anthropic API for categorizing
+unknown merchant names.
 
-Tuned out of the box for **Bank Yahav (בנק יהב)**, **Isracard (ישראכרט)**, and
-**Cal / Visa Cal (כאל)** exports, with full Hebrew / RTL handling.
+Tuned out of the box for **Bank Yahav (בנק יהב)**, **Isracard (ישראכרט)**,
+**Cal / Visa Cal (כאל)**, **Diners**, and **PayPal**, with full Hebrew / RTL handling and a
+light/dark theme.
 
 ---
 
@@ -39,21 +43,34 @@ at all**. The `.env` is only needed to unlock Gmail scanning and LLM categorizat
 
 ## How to use it
 
-1. **Import** → two quick modes, **Credit cards** and **Bank statement**, each accepting
-   **several files at once** in **CSV, Excel, or PDF**. Formats are auto-detected and the
-   mapping is remembered per format. (A single-file importer with a manual column-mapping
-   step is there too, for new/unusual formats.) PDF statement parsing is best-effort — check
-   the rows afterwards.
-2. **Transactions** → the de-duplicated ledger. Click any category to change it (optionally
-   creating a rule for that merchant). Rows marked `×N` were merged from several sources —
-   expand to see (and un-merge) each one.
+1. **Import** → three quick modes — **Credit cards**, **Bank statement**, and **PayPal** —
+   each accepting **several files at once** in **CSV, Excel, or PDF**. Formats are
+   auto-detected and the mapping is remembered per format. Credit-card files can be tagged
+   with the card's last-4 so two cards of the same issuer stay separate. A **duplicate-file
+   scan** flags/cleans re-uploaded statements, and a **reconciliation** panel shows which
+   months/cards are still missing. (A single-file importer with manual column-mapping is
+   there too, for new/unusual formats.) PDF parsing is best-effort — check the rows after.
+   - **PayPal** exports are multi-row per purchase (payment + card funding + FX conversion);
+     the app collapses each purchase into one ILS charge that reconciles with the card
+     statement and the email receipt, so a PayPal buy is counted once, not three times.
+2. **Transactions** (Ledger) → the de-duplicated ledger, grouped **By category** (collapsible,
+   biggest first) or **By date**. Per-filter totals show spend / income / net (transfers
+   excluded; loans flagged). Expenses are red with a `-`, income green with a `+`. Click any
+   category to change it (optionally creating a rule). Rows merged from several sources expand
+   to show (and un-merge) each one, with the account/card each came from.
 3. **Duplicates** → confirm or dismiss suspected *true* double charges (same merchant billed
-   twice from the same source). Cross-file duplicates are merged automatically.
-4. **Categories** → manage categories and the `merchant → category` rule table.
-5. **Insights** → recurring/subscription detection (with next date + monthly/annual cost)
-   and anomaly flags (spikes, brand-new merchants, possible double charges).
-6. **Settings** → connect Gmail, tune duplicate matching, toggle AI categorization, export
-   your data (JSON/CSV), or wipe everything.
+   twice from the same source). Cross-source duplicates are merged automatically.
+4. **Categories** → manage categories and the `merchant → category` rule table. Includes
+   **Loan In** / **Loan Repayment** (count in totals but flagged as loans) and **Transfers**
+   (excluded from totals — internal money movement).
+5. **Insights** → where the money goes, recurring/subscriptions (next date + monthly/annual
+   cost), overlapping services to consolidate, savings tips, and anomaly flags.
+6. **Dashboard** → KPIs, spending donut, cash flow, and a **Balance & forecast** card:
+   current bank balance (from a direct sync) plus a projected end-of-month balance that
+   updates with every transaction.
+7. **Settings** → connect Gmail/Outlook, sync a bank directly, tune duplicate matching, set
+   salary payers, toggle AI categorization, export (JSON/CSV/PDF/Markdown), or wipe everything.
+   Toggle light/dark with the sun/moon button.
 
 ---
 
@@ -68,12 +85,19 @@ packages/
       parsers/     encoding, amount, date, CSV/XLSX, PDF, OCR, receipt, templates
       normalize/   merchant normalization + fuzzy token-set matching
       categorize/  rule engine + optional LLM
-      dedup/       cross-file merge + double-charge alerts
-      insights/    dashboard, recurring, anomalies
-      email/       Gmail API + IMAP fallback + scan pipeline
+      dedup/       cross-file merge + double-charge alerts + category detectors
+      reconcile/   bank settlement ↔ card statement cross-check; salary/living-cost tagging
+      insights/    dashboard, forecast, recurring, anomalies, reports, agent export
+      email/       Gmail API + Outlook (Graph) + IMAP fallback + scan pipeline
+      scrape/      direct bank/card sync (israeli-bank-scrapers) + captured balances
       repo/        DB access layer
       routes/      HTTP endpoints
-  web/      React + Vite + Tailwind + Recharts UI
+  web/      React + Vite + Tailwind + Recharts UI (light/dark, CSS-variable themed)
+    src/
+      pages/       Dashboard, Transactions, Import, Duplicates, Insights, Rules, Settings
+      components/  design system (ui.tsx), TransactionTable, Donut, ReconcileCard
+      lib/         theme, format, colors, accounts
+      api/         typed API client
 ```
 
 ---
@@ -93,6 +117,9 @@ All optional. See `.env.example` for the annotated template.
 | `IMAP_HOST` / `IMAP_PORT` / `IMAP_USER` / `IMAP_PASSWORD` | IMAP fallback instead of Gmail API |
 | `ANTHROPIC_API_KEY` | Enables optional LLM categorization |
 | `ANTHROPIC_MODEL` | Model id (default `claude-haiku-4-5-20251001`) |
+| `FINANCE_READ_TOKEN` | Bearer token that guards the read-only `GET /api/export.json` agent endpoint |
+| `OUTLOOK_CLIENT_ID` / `OUTLOOK_CLIENT_SECRET` / `OUTLOOK_TENANT` | Outlook (Microsoft Graph) OAuth |
+| `HOST` | Bind address (default `0.0.0.0`; keep behind Tailscale/firewall) |
 
 ---
 
@@ -173,10 +200,14 @@ The scope is `Mail.Read` (read-only) + `offline_access` (so the app can refresh 
 
 ## Direct bank / card connection (optional)
 
-Pull transactions **straight from Bank Yahav / Isracard / Cal** — no CSV export — via
+Pull transactions **straight from Bank Yahav / Cal** — no CSV export — via
 [`israeli-bank-scrapers`](https://github.com/eshaham/israeli-bank-scrapers), which logs in
 with your credentials using a headless browser, locally. Scraped charges carry the
-transaction number, so they auto-merge with the email/receipt copies.
+transaction number, so they auto-merge with the email/receipt copies. A Yahav sync also
+captures your **current account balance**, which feeds the dashboard's balance & forecast.
+
+> Isracard is **not** available for direct sync (its site blocks the automated browser with
+> HTTP 403) — import Isracard via a file export (CSV/Excel/PDF) instead.
 
 1. **Set `TOKEN_ENCRYPTION_KEY`** in `.env` so your bank credentials are encrypted at rest.
 2. The scraper needs a Chromium. `npm install` downloads one automatically; on a small VPS
@@ -184,8 +215,8 @@ transaction number, so they auto-merge with the email/receipt copies.
    `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser`. On a fresh server you may also need
    Chromium's shared libraries: `sudo apt-get install -y libnss3 libatk-bridge2.0-0 libgbm1 libasound2 libgtk-3-0`.
 3. In the app: **Settings → Direct connection** → **Connect** a provider → enter credentials
-   (Isracard: ID + last-6 card digits + password; Cal: username + password; Yahav: username +
-   national ID + password) → **Save** → **Sync now**.
+   (Yahav: username + national ID + password; Cal: username + password) → **Save** →
+   **Sync now**.
 
 > Credentials never leave your machine. Some providers occasionally require a one-time code
 > (OTP/2FA); if a sync reports that, tell me and I'll add the interactive step. This uses the
@@ -274,6 +305,22 @@ RTL directional marks, DD/MM/YYYY dates, and trailing summary rows.
 
 Parsed records are validated with Zod at the boundary; malformed rows are surfaced as
 *skipped with a reason* rather than silently dropped.
+
+### Read-only JSON API (for an external AI agent)
+
+`GET /api/export.json` returns everything an external agent needs — meta, net worth,
+accounts, transactions, positions, recurring, budgets, debts, and history — as plain JSON
+(numbers for money, ISO dates, explicit currency). It's guarded by a Bearer token:
+
+```bash
+curl -H "Authorization: Bearer $FINANCE_READ_TOKEN" \
+  https://<your-vps>.<tailnet>.ts.net/api/export.json
+```
+
+Set `FINANCE_READ_TOKEN` in `.env` to enable it (the endpoint uses a constant-time compare
+and returns 401 without a valid token). Note this token guards **only** this endpoint —
+binding `HOST=0.0.0.0` still exposes the rest of the API unauthenticated, so keep the whole
+app behind Tailscale / a firewall as below.
 
 ---
 
@@ -367,6 +414,11 @@ git pull && npm install && npm run build && pm2 restart finance
 ## Tech
 
 Full-stack TypeScript (strict). Backend: Node + Fastify + better-sqlite3 + Zod. Parsing:
-`pdf-parse`, `tesseract.js`, `csv-parse`, `xlsx`, `chardet` + `iconv-lite`. Email: Gmail API
-(`googleapis`) with an `imapflow` + `mailparser` fallback. Frontend: React + Vite + Tailwind
-+ Recharts.
+`pdf-parse`, `tesseract.js`, `csv-parse`, `@e965/xlsx` (the npm-native **patched** SheetJS —
+the plain `xlsx` package is frozen at 0.18.5 with unpatched advisories), `chardet` +
+`iconv-lite`. Email: Gmail API (`googleapis`) + Microsoft Graph (Outlook) with an `imapflow`
++ `mailparser` fallback. Direct sync: `israeli-bank-scrapers`. Frontend: React + Vite +
+Tailwind + Recharts, light/dark themed via CSS variables.
+
+For an agent-oriented map of the codebase, see [`CLAUDE.md`](CLAUDE.md) and
+[`docs/MEMORY.md`](docs/MEMORY.md).
