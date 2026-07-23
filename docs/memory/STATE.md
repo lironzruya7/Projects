@@ -5,8 +5,15 @@
 
 _Last updated: 2026-07-23_
 
+## Repo structure (IMPORTANT)
+- `lironzruya7/Projects` is a **multi-project monorepo: one project per branch**, never merged
+  to `main` (each branch has its own root, so merging would collide). This finance app lives on
+  branch `claude/new-session-1bceap`. Other branches are other owners' projects — do NOT touch.
+  **Do NOT merge this branch to `main`.** CLAUDE.md/STATE.md/the SessionStart hook load from the
+  checked-out branch, so no merge is needed. The VPS `/root/finance` must stay on this branch.
+
 ## Deployed / current
-- **Branch:** `claude/new-session-1bceap` · **HEAD:** `f8bc036`
+- **Branch:** `claude/new-session-1bceap` (this is home — not merged to main) · **HEAD:** `f8bc036`
 - **Prod:** Hostinger VPS `/root/finance`, pm2 app `finance`, served on `127.0.0.1:4000`,
   reached over the tailnet via `tailscale serve` at `https://srv1814608.tail7d0828.ts.net`.
 - **OS `finance_report` integration is LIVE** — reads `GET /api/export.json` (Bearer
@@ -29,8 +36,8 @@ _Last updated: 2026-07-23_
 - **Data verification (pending — do live, don't trust the build):** confirm `/api/export.json`
   returns rows + `meta.notes`; delete emails + re-scan (fixed extractor); import the PayPal CSV;
   re-tag the ₪75,000 Yahav loan `Transfers` → `Loan In`.
-- **Merge `claude/new-session-1bceap` → default branch** to make CLAUDE.md/STATE.md auto-load
-  permanent (features are already deployed from the branch).
+- ~~Merge to default branch~~ — **do NOT** (branch-per-project repo; see Repo structure above).
+  The branch IS home; nothing to merge.
 - **xlsx fix source.** Using `@e965/xlsx@0.20.3` (npm-native patched SheetJS) instead of the
   official CDN 0.20.x (CDN is policy-blocked in the dev env; npm-native is deploy-reliable).
   Owner may prefer the official CDN tarball — swap is one line if so.
