@@ -115,27 +115,24 @@ RUN useradd --create-home --uid 1000 --shell /bin/bash runner \
     && chown runner:runner /work
 
 # ---------------------------------------------------------------------------
-# Bake nuclei templates at BUILD time (network is available here) so exec
-# containers can run fully offline (--network none). Version-agnostic: run the
-# update, then find wherever nuclei stored the templates and normalize them to
-# /opt/nuclei-templates. The build FAILS if the template set comes up empty.
-# Exposed via NUCLEI_TEMPLATES + the runner's default ~/nuclei-templates path.
+# Bake nuclei templates at BUILD time (network available) so exec containers
+# run fully offline (--network none). Deterministic: git-clone the official
+# templates repo (exactly what `nuclei -update-templates` fetches) straight to
+# /opt/nuclei-templates — no dependence on nuclei's internal path resolution.
+# The build FAILS if no template YAMLs are present. Exposed via
+# NUCLEI_TEMPLATES + the runner's default template paths.
 # ---------------------------------------------------------------------------
 ENV NUCLEI_TEMPLATES=/opt/nuclei-templates
 RUN set -eux; \
-    HOME=/root nuclei -update-templates -disable-update-check >/tmp/nuclei-ut.log 2>&1 \
-      || HOME=/root nuclei -update-templates >/tmp/nuclei-ut.log 2>&1 || true; \
-    src="$(find /root -maxdepth 4 -type d -name 'nuclei-templates' 2>/dev/null | head -1)"; \
-    test -n "$src"; \
-    mkdir -p /opt; cp -a "$src" /opt/nuclei-templates; \
-    [ -n "$(ls -A /opt/nuclei-templates)" ]; \
+    git clone --depth 1 https://github.com/projectdiscovery/nuclei-templates /opt/nuclei-templates; \
+    rm -rf /opt/nuclei-templates/.git; \
+    test -n "$(find /opt/nuclei-templates -name '*.yaml' 2>/dev/null | head -1)"; \
     chown -R runner:runner /opt/nuclei-templates; \
     mkdir -p /home/runner/.local; \
     ln -sfn /opt/nuclei-templates /home/runner/nuclei-templates; \
     ln -sfn /opt/nuclei-templates /home/runner/.local/nuclei-templates; \
     chown -R runner:runner /home/runner/.local; \
-    chown -h runner:runner /home/runner/nuclei-templates; \
-    rm -rf /root/nuclei-templates /root/.config/nuclei /root/.local 2>/dev/null || true
+    chown -h runner:runner /home/runner/nuclei-templates
 
 USER runner
 WORKDIR /work
