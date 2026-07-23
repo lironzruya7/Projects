@@ -150,6 +150,20 @@ export function buildAgentExport(asOf: string): Record<string, unknown> {
       as_of: asOf,
       base_currency: baseCurrency,
       accounts: accounts.map((a) => ({ id: a.id, name: a.name, type: a.type, currency: a.currency })),
+      // Contract flag for the consuming assistant: this app is transaction-based.
+      // Balances/net-worth/history are DERIVED, not real bank data — never present
+      // them as an actual account balance.
+      notes:
+        'Transaction-based data (income/expense flows). net_worth, account balances and ' +
+        'history are DERIVED as cumulative sums of imported flows in base_currency — they are ' +
+        'NOT real bank balances or market positions and have no opening balance or FX. ' +
+        'positions, budgets and debts are empty unless explicitly populated. Amounts are summed ' +
+        'only within their own currency.',
+      derived: {
+        net_worth: 'cumulative_cashflow',
+        balances: 'cumulative_cashflow',
+        history: 'cumulative_cashflow',
+      },
     },
     net_worth,
     accounts,

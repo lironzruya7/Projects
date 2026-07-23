@@ -13,7 +13,8 @@ the relevant topic when you change behaviour.
 - **Commands:** `packages.json` scripts — `dev`, `build`, `typecheck`, `test`, `start`.
 - **Entry:** server `packages/server/src/index.ts` (registers routes, serves web in prod on
   port 4000); web `packages/web/src/main.tsx` → `App.tsx`.
-- **Config:** `packages/server/src/config.ts` — reads env (`PORT`, `HOST` default `0.0.0.0`,
+- **Config:** `packages/server/src/config.ts` — reads env (`PORT`, `HOST` default `127.0.0.1`
+  local-only for PII safety; `tailscale serve` proxies to it,
   `DATABASE_PATH`, `DEFAULT_CURRENCY`, `FINANCE_READ_TOKEN`, `TOKEN_ENCRYPTION_KEY`,
   scraper/puppeteer paths). Annotated template in `.env.example`.
 - **Deploy:** VPS `/root/finance`; `git pull && npm install && npm run build && pm2 restart

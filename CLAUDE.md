@@ -83,8 +83,9 @@ import/scrape/email → parsers → Zod (models/types.ts ParsedTransaction) → 
 
 - The app has **no auth**. Never expose it to the public internet — Tailscale only.
 - `GET /api/export.json` is the ONLY token-gated route (`FINANCE_READ_TOKEN`, constant-time
-  compare, 401 on failure). Binding `HOST=0.0.0.0` exposes the rest unauthenticated — must be
-  firewalled to the tailnet.
+  compare, 401 on failure). `HOST` defaults to `127.0.0.1` (local-only, PII-safe); `tailscale
+  serve` reaches it. Binding `HOST=0.0.0.0` exposes the rest of the API unauthenticated and
+  must NOT be used without a tailnet firewall.
 - Bank credentials + OAuth tokens are encrypted at rest when `TOKEN_ENCRYPTION_KEY` is set.
 - Only normalized merchant names go to the optional LLM — never amounts or statements.
 

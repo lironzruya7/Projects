@@ -21,11 +21,14 @@ function envStr(key: string, fallback = ''): string {
 export const config = {
   repoRoot,
   port: Number(envStr('PORT', '4000')),
-  // Bind address. Default 0.0.0.0 so the server is reachable over the tailnet by
-  // IP (in addition to `tailscale serve`, which proxies to 127.0.0.1 and keeps
-  // working). Firewall the port to your tailnet — only /api/export.json is token
-  // protected; the rest of the API is not. Set HOST=127.0.0.1 to bind local-only.
-  host: envStr('HOST', '0.0.0.0'),
+  // Bind address. Defaults to 127.0.0.1 (local-only) — the safe default for
+  // financial PII: `tailscale serve` proxies the tailnet to 127.0.0.1, so the app
+  // is fully reachable over the tailnet without ever listening on a public
+  // interface. Only /api/export.json is token-protected; the rest of the API is
+  // NOT, so do not bind 0.0.0.0 unless you also firewall the port to your tailnet
+  // (e.g. `ufw allow in on tailscale0 to any port 4000`). Reach the app by IP
+  // (not `tailscale serve`)? Then set HOST=0.0.0.0 AND add that firewall rule.
+  host: envStr('HOST', '127.0.0.1'),
   // Bearer token for the read-only external export at GET /api/export.json.
   // When empty, that endpoint returns 401 for everyone.
   readToken: envStr('FINANCE_READ_TOKEN'),

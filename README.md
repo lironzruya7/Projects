@@ -119,7 +119,7 @@ All optional. See `.env.example` for the annotated template.
 | `ANTHROPIC_MODEL` | Model id (default `claude-haiku-4-5-20251001`) |
 | `FINANCE_READ_TOKEN` | Bearer token that guards the read-only `GET /api/export.json` agent endpoint |
 | `OUTLOOK_CLIENT_ID` / `OUTLOOK_CLIENT_SECRET` / `OUTLOOK_TENANT` | Outlook (Microsoft Graph) OAuth |
-| `HOST` | Bind address (default `0.0.0.0`; keep behind Tailscale/firewall) |
+| `HOST` | Bind address (default `127.0.0.1`, local-only — `tailscale serve` reaches it safely; set `0.0.0.0` **only** with a tailnet firewall) |
 
 ---
 
