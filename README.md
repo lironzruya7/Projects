@@ -337,7 +337,9 @@ Hard-won gotchas from building this on a live Kali/Tailscale/Docker box:
 
 | Path | Purpose |
 |------|---------|
-| `CLAUDE.md` | Quick-reference memory file |
+| `CLAUDE.md` | Operating brief / quick-reference memory file |
+| `docs/PLAYBOOK.md` | How the OS session should drive `/api/exec` (fields, tool recipes) |
+| `docs/memory/STATE.md` | Live deployment state (printed at session start) |
 | `app/main.py` | FastAPI service (auth, throttling, exec, sweep) |
 | `app/run.sh` / `app/requirements.txt` | Loopback launcher / deps |
 | `docker/Dockerfile.sec-toolbox` | Lean default image (`sec-toolbox:latest`) |

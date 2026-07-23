@@ -36,6 +36,13 @@ Update at each stop-point; add new entries at the top of History, don't rewrite.
 - With `/api/exec` already tailnet-only, the box now has **no public entry
   points** (dark on the public internet).
 
+## OS-side integration
+- **`docs/PLAYBOOK.md`** documents how the Claude OS session should drive
+  `/api/exec` to use all current capabilities (network/image/raw fields, offline
+  nuclei flags `-t $NUCLEI_TEMPLATES -disable-update-check`, heavy-image RE/mem
+  recipes, VPN attribution, response handling). Contract is backward-compatible;
+  old OS requests still work. **Owner: relay PLAYBOOK.md to the OS session.**
+
 ## Open / future (do ONLY if the owner relays a spec)
 - **Volatility3 symbol-seed** — populate a matching Linux ISF into a cache
   OFFLINE (analysis runs `network=none`, can't fetch live). Not started.
@@ -50,6 +57,9 @@ Update at each stop-point; add new entries at the top of History, don't rewrite.
   `/etc/wireguard/wg0.conf`).
 
 ## History (newest first)
+- **Added `docs/PLAYBOOK.md`**: OS-side integration playbook — how to invoke the
+  new capabilities (image/raw/network, offline nuclei, heavy recipes, VPN). Relay
+  to the OS session; no VPS change needed (contract is backward-compatible).
 - **SSH locked to tailnet (LIVE)**: ran `lockdown-ssh.sh lockdown/confirm/persist`
   on the box; public TCP 22 dropped, tailnet SSH verified, persisted across
   reboot. Box now has no public entry points.
