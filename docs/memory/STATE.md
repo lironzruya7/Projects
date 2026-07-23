@@ -28,11 +28,13 @@ Update at each stop-point; add new entries at the top of History, don't rewrite.
   that aren't applied on the box don't change it — just add a History line.
 
 ## Host access
-- SSH currently over the **public Hostinger IP**. `deploy/lockdown-ssh.sh` is
-  available to restrict SSH to the tailnet (drop public TCP 22) with a safe
-  pre-check + dead-man's-switch. **Not yet applied** — owner to run when ready
-  (keep Hostinger console open; disable Tailscale key expiry first).
-- `/api/exec` is already tailnet-only (loopback + `tailscale serve`).
+- **SSH is now tailnet-only** — `deploy/lockdown-ssh.sh lockdown` applied +
+  `confirm` + `persist` (netfilter-persistent, survives reboot). Public TCP 22 is
+  dropped; verified live: tailnet SSH (`root@100.116.160.2`) works, public does
+  not. Out-of-band fallback = Hostinger console; rollback =
+  `sudo ./deploy/lockdown-ssh.sh rollback`.
+- With `/api/exec` already tailnet-only, the box now has **no public entry
+  points** (dark on the public internet).
 
 ## Open / future (do ONLY if the owner relays a spec)
 - **Volatility3 symbol-seed** — populate a matching Linux ISF into a cache
@@ -48,6 +50,9 @@ Update at each stop-point; add new entries at the top of History, don't rewrite.
   `/etc/wireguard/wg0.conf`).
 
 ## History (newest first)
+- **SSH locked to tailnet (LIVE)**: ran `lockdown-ssh.sh lockdown/confirm/persist`
+  on the box; public TCP 22 dropped, tailnet SSH verified, persisted across
+  reboot. Box now has no public entry points.
 - **PR #4 merged**: `deploy/lockdown-ssh.sh` — tailnet-only SSH with safe
   pre-check + dead-man's-switch. Repo-only; **not yet applied on the box**.
 - **PR #2 merged → `main @ f6f1647`**: docs installed as auto-loaded memory —
