@@ -138,6 +138,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       // Keep built-in categories; remove user rules + custom categories.
       db.prepare('DELETE FROM category_rules').run();
       db.prepare('DELETE FROM categories WHERE is_builtin = 0').run();
+      db.prepare('DELETE FROM goals').run();
     });
     tx();
     return { ok: true };

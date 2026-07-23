@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Anomaly, BudgetsReport, RecommendationReport, RecurringItem, UpcomingReport } from '../api/client';
+import type { Anomaly, BudgetsReport, Goal, RecommendationReport, RecurringItem, UpcomingReport } from '../api/client';
 import { api } from '../api/client';
-import { Bidi, Card, Skeleton, StatCard } from '../components/ui';
+import { Bidi, Button, Card, Skeleton, StatCard } from '../components/ui';
 import { categoryColor } from '../lib/colors';
 import { formatDate, formatMoney } from '../lib/format';
 
@@ -20,17 +20,19 @@ export function Insights(): JSX.Element {
   const [rec, setRec] = useState<RecommendationReport | null>(null);
   const [upcoming, setUpcoming] = useState<UpcomingReport | null>(null);
   const [budgets, setBudgets] = useState<BudgetsReport | null>(null);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const nav = useNavigate();
 
   useEffect(() => {
-    Promise.all([api.recurring(), api.anomalies(), api.recommendations(), api.upcoming(), api.budgets()]).then(
-      ([r, a, rc, up, bg]) => {
+    Promise.all([api.recurring(), api.anomalies(), api.recommendations(), api.upcoming(), api.budgets(), api.goals()]).then(
+      ([r, a, rc, up, bg, gl]) => {
         setRecurring(r.recurring);
         setAnomalies(a.anomalies);
         setRec(rc);
         setUpcoming(up);
         setBudgets(bg);
+        setGoals(gl.goals);
         setLoading(false);
       },
     );
@@ -45,6 +47,8 @@ export function Insights(): JSX.Element {
   return (
     <div className="space-y-4">
       <h1 className="hidden md:block text-2xl font-semibold">Insights & recommendations</h1>
+
+      <GoalsCard goals={goals} onChange={setGoals} />
 
       {budgets && budgets.items.length > 0 && <BudgetsCard report={budgets} onChange={setBudgets} />}
 
@@ -376,4 +380,76 @@ function anomalyMeta(type: Anomaly['type']): { label: string; color: string } {
   if (type === 'spike') return { label: 'spike', color: '#fb7185' };
   if (type === 'new_merchant') return { label: 'new', color: '#fbbf24' };
   return { label: 'double?', color: '#f472b6' };
+}
+
+/** Savings goals: target + optional deadline, progress from net cashflow since start. */
+function GoalsCard({ goals, onChange }: { goals: Goal[]; onChange: (g: Goal[]) => void }): JSX.Element {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [amount, setAmount] = useState('');
+  const [date, setDate] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (): Promise<void> => {
+    const targetAmount = Number(amount);
+    if (!name.trim() || !targetAmount || targetAmount <= 0) return;
+    setBusy(true);
+    try {
+      const r = await api.addGoal({ name: name.trim(), targetAmount, targetDate: date || null });
+      onChange(r.goals);
+      setName(''); setAmount(''); setDate(''); setAdding(false);
+    } finally { setBusy(false); }
+  };
+  const remove = async (id: string): Promise<void> => {
+    const r = await api.deleteGoal(id);
+    onChange(r.goals);
+  };
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-medium">🎯 Savings goals</h3>
+        <button className="text-brand text-sm" onClick={() => setAdding((v) => !v)}>{adding ? 'Cancel' : '+ Add goal'}</button>
+      </div>
+
+      {adding && (
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-3">
+          <input className="input" placeholder="Name (e.g. Emergency fund)" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="input" type="number" inputMode="numeric" placeholder="Target amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <Button onClick={submit} disabled={busy}>Save</Button>
+        </div>
+      )}
+
+      {goals.length === 0 ? (
+        <div className="text-muted text-sm">No goals yet. Add one to track progress from your net savings.</div>
+      ) : (
+        <div className="space-y-3">
+          {goals.map((g) => {
+            const color = g.onTrack === false ? 'var(--expense)' : 'var(--income)';
+            return (
+              <div key={g.id}>
+                <div className="flex items-center justify-between text-sm mb-1">
+                  <span className="font-medium">{g.name}</span>
+                  <span className="tnum text-muted">
+                    {formatMoney(g.saved, g.currency)} / {formatMoney(g.target_amount, g.currency)} ({g.pct}%)
+                    <button className="ml-2 text-muted hover:text-rose-400" title="Delete" onClick={() => remove(g.id)}>✕</button>
+                  </span>
+                </div>
+                <div className="h-2 bg-panel2 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${g.pct}%`, background: color }} />
+                </div>
+                <div className="text-xs text-muted mt-0.5 flex flex-wrap gap-x-3">
+                  <span>~{formatMoney(g.monthlyRate, g.currency)}/mo saved</span>
+                  {g.etaMonths != null && <span>· ETA ~{g.etaMonths} mo</span>}
+                  {g.etaMonths == null && g.pct < 100 && <span>· not saving yet</span>}
+                  {g.target_date && <span>· by {formatDate(g.target_date)} {g.onTrack === true ? '· on track ✓' : g.onTrack === false ? '· behind' : ''}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
 }

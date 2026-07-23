@@ -135,3 +135,15 @@ CREATE TABLE IF NOT EXISTS budgets (
   currency      TEXT NOT NULL DEFAULT 'ILS',
   updated_at    TEXT NOT NULL
 );
+
+-- Savings goals. Progress is derived from cumulative net cashflow since created_at
+-- (this app is transaction-based; there is no real account balance).
+CREATE TABLE IF NOT EXISTS goals (
+  id            TEXT PRIMARY KEY,
+  name          TEXT NOT NULL,
+  target_amount REAL NOT NULL,
+  currency      TEXT NOT NULL DEFAULT 'ILS',
+  target_date   TEXT,            -- optional YYYY-MM-DD deadline
+  note          TEXT,
+  created_at    TEXT NOT NULL
+);

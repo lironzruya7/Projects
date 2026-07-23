@@ -134,6 +134,21 @@ export interface RecurringItem {
   isNew: boolean;
 }
 
+export interface Goal {
+  id: string;
+  name: string;
+  target_amount: number;
+  currency: string;
+  target_date: string | null;
+  note: string | null;
+  created_at: string;
+  saved: number;
+  pct: number;
+  monthlyRate: number;
+  etaMonths: number | null;
+  onTrack: boolean | null;
+}
+
 export interface NotifyConfigInput {
   enabled: boolean;
   channel: 'ntfy' | 'telegram' | 'webhook';
@@ -406,6 +421,10 @@ export const api = {
   saveNotify: (cfg: NotifyConfigInput) => req<NotifyConfigView>('/api/notify/settings', { method: 'PUT', body: JSON.stringify(cfg) }),
   notifyTest: () => req<{ ok: boolean; status?: number; detail?: string }>('/api/notify/test', { method: 'POST' }),
   notifyDigest: () => req<{ ok: boolean; detail?: string; preview: string }>('/api/notify/digest', { method: 'POST' }),
+  goals: () => req<{ goals: Goal[] }>('/api/goals'),
+  addGoal: (g: { name: string; targetAmount: number; targetDate?: string | null; note?: string | null }) =>
+    req<{ goals: Goal[] }>('/api/goals', { method: 'POST', body: JSON.stringify(g) }),
+  deleteGoal: (id: string) => req<{ goals: Goal[] }>(`/api/goals/${id}`, { method: 'DELETE' }),
   budgets: () => req<BudgetsReport>('/api/budgets'),
   setBudget: (category: string, limit: number) =>
     req<BudgetsReport>(`/api/budgets/${encodeURIComponent(category)}`, { method: 'PUT', body: JSON.stringify({ limit }) }),
