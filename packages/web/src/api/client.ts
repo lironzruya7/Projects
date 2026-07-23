@@ -141,6 +141,7 @@ export interface NotifyConfigInput {
   telegramBotToken: string;
   telegramChatId: string;
   includeAmounts: boolean;
+  largeChargeThreshold: number;
 }
 export type NotifyConfigView = Omit<NotifyConfigInput, 'telegramBotToken'> & { telegramTokenSet: boolean };
 

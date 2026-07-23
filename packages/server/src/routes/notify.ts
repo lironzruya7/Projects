@@ -10,6 +10,7 @@ const NotifyBody = z.object({
   telegramBotToken: z.string(),
   telegramChatId: z.string(),
   includeAmounts: z.boolean(),
+  largeChargeThreshold: z.number().min(0),
 });
 
 /** Mask the Telegram bot token before sending config to the client. */

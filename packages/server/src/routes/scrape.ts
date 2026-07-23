@@ -43,6 +43,8 @@ export async function scrapeRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ provider: z.string(), months: z.number().int().min(1).max(24).optional() }).parse(req.body);
     try {
       const result = await runScrape(body.provider, { months: body.months });
+      const { notifyNewLargeCharges } = await import('../notify/notify.js');
+      void notifyNewLargeCharges().catch(() => {});
       return result;
     } catch (err) {
       // Point the client at the failure screenshot so we can see what happened.

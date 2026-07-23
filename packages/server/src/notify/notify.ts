@@ -1,5 +1,6 @@
-import { getSetting } from '../db/db.js';
+import { getSetting, setSetting } from '../db/db.js';
 import { buildForecast, buildUpcoming, detectAnomalies, detectRecurring } from '../insights/insights.js';
+import { allPrimary } from '../repo/transactions.js';
 
 const CUR_SYMBOL: Record<string, string> = { ILS: '₪', USD: '$', EUR: '€', GBP: '£' };
 function formatMoney(amount: number, currency: string): string {
@@ -21,6 +22,7 @@ export interface NotifyConfig {
   telegramBotToken: string;
   telegramChatId: string;
   includeAmounts: boolean;
+  largeChargeThreshold: number; // alert on a new single charge at/above this (0 = off)
 }
 
 const DEFAULT: NotifyConfig = {
@@ -30,6 +32,7 @@ const DEFAULT: NotifyConfig = {
   telegramBotToken: '',
   telegramChatId: '',
   includeAmounts: true,
+  largeChargeThreshold: 1000,
 };
 
 export function getNotifyConfig(): NotifyConfig {
@@ -128,4 +131,40 @@ export function composeDigest(): { title: string; message: string } {
   if (anomalies.length) lines.push(`🔎 ${anomalies.length} anomaly flag(s) to review`);
 
   return { title: '💰 Weekly finance digest', message: lines.join('\n') };
+}
+
+/**
+ * Real-time alert for newly-imported large charges. Call after any ingest
+ * (import / scan / scrape + dedup). Uses a stored watermark on transaction
+ * createdAt so each charge is only ever alerted once, and never backfills old
+ * data. Cheap, stateless per call, no spam. No-op unless notifications are on.
+ */
+export async function notifyNewLargeCharges(): Promise<SendResult | null> {
+  const cfg = getNotifyConfig();
+  const threshold = cfg.largeChargeThreshold;
+  const watermark = getSetting<string>('notify_watermark', '');
+  const primaries = allPrimary();
+
+  // Advance the watermark to the newest createdAt regardless of whether we send,
+  // so we never re-alert on the same rows or backfill history on first enable.
+  let maxCreated = watermark;
+  for (const t of primaries) if (t.createdAt > maxCreated) maxCreated = t.createdAt;
+
+  let result: SendResult | null = null;
+  if (cfg.enabled && threshold > 0 && watermark) {
+    const fresh = primaries.filter(
+      (t) => t.createdAt > watermark && t.category !== 'Transfers' && t.amount < 0 && Math.abs(t.amount) >= threshold,
+    );
+    if (fresh.length > 0) {
+      const base = getSetting<string>('currency', 'ILS');
+      const money = (n: number): string => (cfg.includeAmounts ? formatMoney(n, base) : '••');
+      const lines = fresh
+        .slice(0, 5)
+        .map((t) => `• ${t.merchantRaw || t.merchantNormalized || 'charge'} — ${money(t.amount)}`);
+      if (fresh.length > 5) lines.push(`…and ${fresh.length - 5} more`);
+      result = await sendNotification('🚨 Large charge', lines.join('\n'), 4);
+    }
+  }
+  if (maxCreated !== watermark) setSetting('notify_watermark', maxCreated);
+  return result;
 }

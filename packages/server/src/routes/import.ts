@@ -10,6 +10,7 @@ import { createBatch, deleteBatch, deleteBatchesBySource, findBatchByHash, findD
 import { insertParsed } from '../repo/transactions.js';
 import { runDedup } from '../dedup/engine.js';
 import { getUpload, putUpload } from '../util/uploadCache.js';
+import { notifyNewLargeCharges } from '../notify/notify.js';
 
 const CommitBody = z.object({
   uploadId: z.string(),
@@ -78,6 +79,7 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const dedup = runDedup();
+    void notifyNewLargeCharges().catch(() => {});
     return {
       imported: ids.length,
       skipped: result.skipped,
@@ -156,6 +158,7 @@ export async function importRoutes(app: FastifyInstance): Promise<void> {
       }
     }
     const dedup = runDedup();
+    void notifyNewLargeCharges().catch(() => {});
     return { results, dedup };
   });
 

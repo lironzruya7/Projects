@@ -640,6 +640,7 @@ function NotifyCard({ onMsg }: { onMsg: (m: string) => void }): JSX.Element {
       telegramBotToken: token, // blank => server keeps existing
       telegramChatId: next.telegramChatId,
       includeAmounts: next.includeAmounts,
+      largeChargeThreshold: next.largeChargeThreshold,
     });
     setCfg(saved);
     setToken('');
@@ -710,6 +711,11 @@ function NotifyCard({ onMsg }: { onMsg: (m: string) => void }): JSX.Element {
         <label className="flex items-center gap-2 text-sm mt-1">
           <input type="checkbox" checked={cfg.includeAmounts} onChange={(e) => save({ includeAmounts: e.target.checked })} />
           <span>Include amounts in messages <span className="text-muted text-xs">(off = counts/labels only)</span></span>
+        </label>
+        <label className="block max-w-xs">
+          <span className="text-xs text-muted">Alert on a new charge at/above (0 = off)</span>
+          <input className="input" type="number" inputMode="numeric" value={cfg.largeChargeThreshold}
+            onChange={(e) => setCfg({ ...cfg, largeChargeThreshold: Number(e.target.value) || 0 })} onBlur={() => save({})} />
         </label>
       </div>
 

@@ -128,13 +128,16 @@ export async function emailRoutes(app: FastifyInstance): Promise<void> {
       .parse(req.body ?? {});
     try {
       const { runDedup } = await import('../dedup/engine.js');
+      const { notifyNewLargeCharges } = await import('../notify/notify.js');
       if (body.provider) {
         const result = await runScan({ providerName: body.provider, maxResults: body.maxResults });
         const dedup = runDedup();
+        void notifyNewLargeCharges().catch(() => {});
         return { ...result, dedup };
       }
       const multi = await scanAll({ maxResults: body.maxResults });
       const dedup = runDedup();
+      void notifyNewLargeCharges().catch(() => {});
       return { ...multi, dedup };
     } catch (err) {
       return reply.code(400).send({ error: (err as Error).message });
