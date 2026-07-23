@@ -21,10 +21,13 @@ _Last updated: 2026-07-23_
   budgets, debts, history`.
 
 ## Open items (owner decisions / follow-ups)
-- **HOST access method — needs owner confirm.** Default is now `127.0.0.1` (PII-safe). If the
-  owner reaches the app by **tailnet IP directly** (not `tailscale serve`), set `HOST=0.0.0.0`
-  in `.env` **and** firewall: `ufw allow in on tailscale0 to any port 4000`. If they use
-  `tailscale serve`, nothing to do.
+- **🔴 PUBLIC EXPOSURE — remediation pending on the VPS.** Owner has been reaching the app via
+  the **Hostinger public IP** (prod `HOST=0.0.0.0`, port 4000 open to the internet) — financial
+  PII exposed. Fix (owner runs on VPS, in order): (1) `ufw` allow SSH, allow port 4000 only on
+  `tailscale0`, deny public 4000; (2) `tailscale serve --bg 4000` for HTTPS over the tailnet;
+  (3) deploy (code now binds `127.0.0.1` by default); (4) **rotate `FINANCE_READ_TOKEN`** (treat
+  as leaked) + update the OS `finance_report` config; (5) verify public `IP:4000` is dead and
+  the `.ts.net` URL works. Access method going forward: **`tailscale serve` only.**
 - **xlsx fix source.** Using `@e965/xlsx@0.20.3` (npm-native patched SheetJS) instead of the
   official CDN 0.20.x (CDN is policy-blocked in the dev env; npm-native is deploy-reliable).
   Owner may prefer the official CDN tarball — swap is one line if so.
