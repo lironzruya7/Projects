@@ -18,10 +18,14 @@ Update at each stop-point; add new entries at the top of History, don't rewrite.
 - All smoke/verify scripts passing live.
 
 ## Repo state
-- **main @ `f6f1647`** — full hardened system + auto-loaded docs (CLAUDE.md,
-  README, this STATE.md, SessionStart hook) all merged. Nothing pending.
+- `main` has PRs #1–#4 merged; **nothing pending**. (Repo-state line is kept
+  hash-agnostic on purpose — the deployed baseline hash below is the meaningful
+  one; `git log origin/main -1` for the exact tip.)
 - Working branch: `claude/hardened-exec-agent-8a3obd` (restart from `origin/main`
   for follow-up work).
+- **Convention:** "Deployed now" tracks what's actually running on the box;
+  update it only when something is deployed/built/changed live. Docs/script PRs
+  that aren't applied on the box don't change it — just add a History line.
 
 ## Host access
 - SSH currently over the **public Hostinger IP**. `deploy/lockdown-ssh.sh` is
@@ -44,8 +48,8 @@ Update at each stop-point; add new entries at the top of History, don't rewrite.
   `/etc/wireguard/wg0.conf`).
 
 ## History (newest first)
-- **SSH lockdown script added** (`deploy/lockdown-ssh.sh`): tailnet-only SSH with
-  safe pre-check + dead-man's-switch. Not yet applied on the box.
+- **PR #4 merged**: `deploy/lockdown-ssh.sh` — tailnet-only SSH with safe
+  pre-check + dead-man's-switch. Repo-only; **not yet applied on the box**.
 - **PR #2 merged → `main @ f6f1647`**: docs installed as auto-loaded memory —
   stable CLAUDE.md operating brief, live docs/memory/STATE.md, SessionStart hook
   (Option B), reorganized README. Docs-only, no code/deploy change.
