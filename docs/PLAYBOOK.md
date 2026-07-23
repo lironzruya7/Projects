@@ -73,3 +73,66 @@ command and blocks out-of-scope BEFORE it leaves the OS — keep doing that).
 - Do not disable the scope-guard, approval, or authorization-first because the
   VPS "can" reach a target. The VPS trusts the token; the OS is the gate.
 - Do not assume network in `none` mode — it has none (not even DNS).
+
+---
+
+## Appendix — ready-to-copy payloads
+
+Replace `<TARGET>` with a scope-approved target and send as the JSON body of
+`POST /api/exec` with header `Authorization: Bearer <token>`. Curl wrapper:
+
+```bash
+curl -s -X POST "$BASE/api/exec" -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d @payload.json | jq .
+```
+
+**Web fingerprint + nuclei (authorized, offline templates):**
+```json
+{ "network":"egress", "timeout":300, "command":"whatweb --color=never https://<TARGET>; echo '--- nuclei ---'; nuclei -u https://<TARGET> -t $NUCLEI_TEMPLATES -disable-update-check -severity critical,high -tags cve,exposure -rate-limit 50 -silent" }
+```
+
+**Content/dir discovery (ffuf):**
+```json
+{ "network":"egress", "timeout":300, "command":"ffuf -w /usr/share/wordlists/dirb/common.txt -u https://<TARGET>/FUZZ -mc 200,301,302,401,403 -rate 50 -s" }
+```
+
+**Port + service scan (TCP connect, no raw):**
+```json
+{ "network":"egress", "timeout":300, "command":"nmap -sV -Pn -T4 --top-ports 1000 <TARGET>" }
+```
+
+**SYN / stealth scan (needs raw):**
+```json
+{ "network":"egress", "raw":true, "timeout":300, "command":"nmap -sS -Pn -T4 -F <TARGET>" }
+```
+
+**TLS posture:**
+```json
+{ "network":"egress", "timeout":300, "command":"testssl.sh --color 0 --fast https://<TARGET>" }
+```
+
+**Static malware triage — no network (send the sample in `files`):**
+```json
+{ "network":"none", "timeout":120, "files":[{"name":"sample.bin","b64":"<BASE64>"}], "command":"file sample.bin; sha256sum sample.bin; echo '--- strings ---'; strings -n 8 sample.bin | head -50; echo '--- yara ---'; yara /path/to/rules.yar sample.bin || true; echo '--- binwalk ---'; binwalk sample.bin" }
+```
+
+**PDF / Office document analysis — no network:**
+```json
+{ "network":"none", "timeout":120, "files":[{"name":"doc.pdf","b64":"<BASE64>"}], "command":"pdfid doc.pdf; echo '---'; pdf-parser --stats doc.pdf 2>/dev/null | head -40" }
+```
+```json
+{ "network":"none", "timeout":120, "files":[{"name":"doc.docm","b64":"<BASE64>"}], "command":"olevba doc.docm" }
+```
+
+**Reverse engineering — Ghidra decompile (heavy, no network):**
+```json
+{ "image":"heavy", "network":"none", "timeout":900, "files":[{"name":"target.bin","b64":"<BASE64>"},{"name":"DecompileFirst.py","b64":"<BASE64 of scripts/ghidra/DecompileFirst.py>"}], "command":"analyzeHeadless /work proj -import /work/target.bin -scriptPath /work -postScript DecompileFirst.py -deleteProject 2>&1 | grep -A2000 'PSEUDO-C' | head -80" }
+```
+
+**Memory forensics — Volatility3 (heavy, no network; needs matching ISF offline):**
+```json
+{ "image":"heavy", "network":"none", "timeout":900, "files":[{"name":"mem.dump","b64":"<BASE64>"}], "command":"vol -f /work/mem.dump linux.pslist.PsList 2>&1 | head -60" }
+```
+
+All above: read `stdout` for the expected markers (not just `exit_code`), and if
+`timed_out` is true, narrow the command or raise `timeout` within the image cap.
