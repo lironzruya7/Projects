@@ -1,0 +1,141 @@
+# sec-toolbox:latest — security-analysis toolbox image.
+#
+# Build:
+#   docker build -t sec-toolbox:latest -f docker/Dockerfile.sec-toolbox docker/
+#
+# The container runs as a NON-root user (`runner`). It carries a broad set of
+# recon / analysis / forensics tools plus authorized offensive tooling (nuclei,
+# ffuf, feroxbuster, sqlmap, hydra, whatweb, ...). Installing these does NOT
+# relax any control: every run still goes through the OS approval + scope-guard,
+# the egress firewall, and the ephemeral --cap-drop ALL / --network none /
+# --rm container. Heavier tools (Volatility3, Ghidra, metasploit) live in the
+# separate optional heavy image, not here.
+#
+# Base: Kali rolling — ships ffuf, nuclei, nikto, radare2, etc. straight from
+# apt, so no separate Go-tool release downloads are needed.
+FROM kalilinux/kali-rolling
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    LANG=C.UTF-8
+
+# ---------------------------------------------------------------------------
+# Distro packages
+# ---------------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        wget \
+        git \
+        bash \
+        jq \
+        # recon / network / web
+        nmap \
+        masscan \
+        whois \
+        dnsutils \
+        nikto \
+        ffuf \
+        nuclei \
+        # offensive / web (authorized use only — gated by the OS scope-guard,
+        # egress approval, egress firewall, and the ephemeral --network none
+        # container model; installing != releasing).
+        feroxbuster \
+        hydra \
+        whatweb \
+        sqlmap \
+        # tls / capture
+        testssl.sh \
+        tshark \
+        # binary / malware / forensics
+        binwalk \
+        yara \
+        radare2 \
+        libimage-exiftool-perl \
+        # python + build helpers for pip tools
+        python3 \
+        python3-pip \
+        python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# Kali's testssl.sh package installs the binary as `testssl` (no .sh); expose
+# the canonical `testssl.sh` name via a symlink to whatever the pkg shipped.
+# ---------------------------------------------------------------------------
+RUN set -eux; \
+    bin="$(dpkg -L testssl.sh | grep -E '^/usr/bin/' | grep -i testssl | head -1)"; \
+    test -n "$bin"; \
+    ln -sf "$bin" /usr/local/bin/testssl.sh; \
+    testssl.sh --version 2>&1 | head -2
+
+# ---------------------------------------------------------------------------
+# Python-based tools: requests + oletools via pip.
+# ---------------------------------------------------------------------------
+RUN set -eux; \
+    pip3 install --no-cache-dir --break-system-packages \
+        requests \
+        oletools
+
+# ---------------------------------------------------------------------------
+# pdfid / pdf-parser — Didier Stevens' canonical single-file scripts.
+# (Not on PyPI; fetched from the upstream suite and put on PATH.)
+# ---------------------------------------------------------------------------
+ARG DSS_RAW=https://raw.githubusercontent.com/DidierStevens/DidierStevensSuite/master
+# Pinned content hashes: the build FAILS if upstream content changes (tamper /
+# drift detection). Bump these deliberately after reviewing an upstream change.
+# (For full reproducibility, pin DSS_RAW to a commit sha instead of `master`.)
+ARG PDFID_SHA256=e958a01f1c2596470f27d3c308061b85d7059ff476a58d74f1957a71b4f1248f
+ARG PDF_PARSER_SHA256=a9fa2faa25e88ab0293543d14aa168ff21fc9fd25a0a8ad657b0dad3171214ac
+RUN set -eux; \
+    curl -fsSL -o /usr/local/bin/pdfid      "${DSS_RAW}/pdfid.py"; \
+    curl -fsSL -o /usr/local/bin/pdf-parser "${DSS_RAW}/pdf-parser.py"; \
+    # Verify integrity BEFORE modifying the files.
+    echo "${PDFID_SHA256}  /usr/local/bin/pdfid" | sha256sum -c -; \
+    echo "${PDF_PARSER_SHA256}  /usr/local/bin/pdf-parser" | sha256sum -c -; \
+    # Upstream shebang is `env python`; Kali only ships python3.
+    sed -i '1s|.*|#!/usr/bin/env python3|' /usr/local/bin/pdfid /usr/local/bin/pdf-parser; \
+    chmod +x /usr/local/bin/pdfid /usr/local/bin/pdf-parser; \
+    pdfid --help >/dev/null 2>&1 || pdfid -h >/dev/null 2>&1 || true
+
+# ---------------------------------------------------------------------------
+# httpx (ProjectDiscovery) — best-effort: Kali packages it as `httpx-toolkit`
+# (the name varies), so a mismatch must NOT fail the image. Optional add-on.
+# ---------------------------------------------------------------------------
+RUN set -eux; \
+    apt-get update; \
+    ( apt-get install -y --no-install-recommends httpx-toolkit \
+      || apt-get install -y --no-install-recommends httpx \
+      || echo "WARNING: httpx not installed (optional)" ); \
+    rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# Non-root runtime user. /work is the mount point for the throwaway workdir.
+# ---------------------------------------------------------------------------
+RUN useradd --create-home --uid 1000 --shell /bin/bash runner \
+    && mkdir -p /work \
+    && chown runner:runner /work
+
+# ---------------------------------------------------------------------------
+# Bake nuclei templates at BUILD time (network available) so exec containers
+# run fully offline (--network none). Deterministic: git-clone the official
+# templates repo (exactly what `nuclei -update-templates` fetches) straight to
+# /opt/nuclei-templates — no dependence on nuclei's internal path resolution.
+# The build FAILS if no template YAMLs are present. Exposed via
+# NUCLEI_TEMPLATES + the runner's default template paths.
+# ---------------------------------------------------------------------------
+ENV NUCLEI_TEMPLATES=/opt/nuclei-templates
+RUN set -eux; \
+    git clone --depth 1 https://github.com/projectdiscovery/nuclei-templates /opt/nuclei-templates; \
+    rm -rf /opt/nuclei-templates/.git; \
+    test -n "$(find /opt/nuclei-templates -name '*.yaml' 2>/dev/null | head -1)"; \
+    chown -R runner:runner /opt/nuclei-templates; \
+    mkdir -p /home/runner/.local; \
+    ln -sfn /opt/nuclei-templates /home/runner/nuclei-templates; \
+    ln -sfn /opt/nuclei-templates /home/runner/.local/nuclei-templates; \
+    chown -R runner:runner /home/runner/.local; \
+    chown -h runner:runner /home/runner/nuclei-templates
+
+USER runner
+WORKDIR /work
+
+# Default to an interactive-ish shell; the exec agent overrides the command.
+CMD ["bash"]

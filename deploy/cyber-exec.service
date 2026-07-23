@@ -1,0 +1,44 @@
+# systemd unit for the cyber-exec agent.
+# Install:
+#   sudo cp deploy/cyber-exec.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now cyber-exec
+#
+# Adjust User/WorkingDirectory to your checkout. The service user must be in
+# the `docker` group (or have equivalent access to the Docker socket).
+[Unit]
+Description=cyber-exec hardened command-execution agent
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=cyberexec
+Group=docker
+WorkingDirectory=/opt/cyber-exec/app
+EnvironmentFile=/opt/cyber-exec/.env
+# Per-request workdirs live here. StateDirectory makes systemd create
+# /var/lib/cyber-exec (owned by this service, auto read-write) — a REAL host
+# path the Docker daemon can bind-mount. Do NOT use PrivateTmp for this: a
+# private /tmp is invisible to dockerd, so -v mounts would come up empty.
+StateDirectory=cyber-exec
+Environment=CYBER_EXEC_WORKROOT=/var/lib/cyber-exec/work
+# Point Docker at a writable config dir inside the (host-visible) state dir so
+# it stops warning about ~/.docker/config.json being unreadable — that warning
+# otherwise pollutes every response's stderr. %S expands to /var/lib.
+Environment=DOCKER_CONFIG=%S/cyber-exec/.docker
+ExecStart=/opt/cyber-exec/.venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=on-failure
+RestartSec=2
+
+# Hardening for the service process itself.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+# NOTE: intentionally NO PrivateTmp — the Docker daemon must be able to see
+# the bind-mount source path. StateDirectory above is host-visible + writable.
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,31 @@
+# cyber-exec egress firewall — reinstall the DOCKER-USER DROP rules at boot.
+#
+# iptables rules do not survive a reboot, and Docker recreates its chains when
+# the daemon starts. This oneshot re-applies deploy/egress-firewall.sh AFTER
+# docker is up, so egress-mode containers stay restricted to the public
+# internet (never the tailnet/LAN/metadata) across reboots and docker restarts.
+#
+# Install:
+#   sudo cp deploy/egress-firewall.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now egress-firewall
+#
+# Adjust the ExecStart path if your checkout is not at /opt/cyber-exec.
+[Unit]
+Description=cyber-exec egress firewall (restrict bridge egress to internet-only)
+Wants=docker.service
+After=docker.service network-online.target
+# Re-run whenever docker restarts (it flushes DOCKER-USER on restart).
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Optional env file (written by vpn-egress.sh): carries EGRESS_VPN / WG_IFACE /
+# EGRESS_SUBNET so the VPN kill-switch is re-applied on every boot/docker-restart.
+EnvironmentFile=-/etc/cyber-exec/egress.env
+ExecStart=/opt/cyber-exec/deploy/egress-firewall.sh install
+ExecStop=/opt/cyber-exec/deploy/egress-firewall.sh remove
+
+[Install]
+WantedBy=multi-user.target
