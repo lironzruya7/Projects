@@ -53,7 +53,8 @@ curl -s -H "Authorization: Bearer $FINANCE_READ_TOKEN" \
 ## Roadmap execution (from docs/IDEAS.md)
 - ✅ Batch 1: Safe-to-Spend + subscription price-hike/trial alerts.
 - ✅ Batch 2: curated Israeli merchant seed rules (out-of-the-box categorization).
-- ▶ Batch 3 (in progress): Monte Carlo forecast bands, cashflow calendar, budgeting/goals.
+- ✅ Batch 3: Monte Carlo forecast bands, upcoming-bills cashflow calendar, category budgets.
+  (Savings goals deferred — small follow-up.)
 - ⏸ Batch 4 (needs owner approval + safety review before pulling any dep): ntfy/Telegram push,
   sqlite-vec embeddings, sharp/OCR upgrade, Ollama/vision-LLM, NL "ask your money".
 

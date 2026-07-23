@@ -127,3 +127,11 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
+-- Per-category monthly budgets (envelope-style). One row per budgeted category.
+CREATE TABLE IF NOT EXISTS budgets (
+  category      TEXT PRIMARY KEY,
+  monthly_limit REAL NOT NULL,
+  currency      TEXT NOT NULL DEFAULT 'ILS',
+  updated_at    TEXT NOT NULL
+);

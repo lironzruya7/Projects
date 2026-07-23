@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Anomaly, RecommendationReport, RecurringItem, UpcomingReport } from '../api/client';
+import type { Anomaly, BudgetsReport, RecommendationReport, RecurringItem, UpcomingReport } from '../api/client';
 import { api } from '../api/client';
 import { Bidi, Card, Skeleton, StatCard } from '../components/ui';
 import { categoryColor } from '../lib/colors';
@@ -19,17 +19,21 @@ export function Insights(): JSX.Element {
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [rec, setRec] = useState<RecommendationReport | null>(null);
   const [upcoming, setUpcoming] = useState<UpcomingReport | null>(null);
+  const [budgets, setBudgets] = useState<BudgetsReport | null>(null);
   const [loading, setLoading] = useState(true);
   const nav = useNavigate();
 
   useEffect(() => {
-    Promise.all([api.recurring(), api.anomalies(), api.recommendations(), api.upcoming()]).then(([r, a, rc, up]) => {
-      setRecurring(r.recurring);
-      setAnomalies(a.anomalies);
-      setRec(rc);
-      setUpcoming(up);
-      setLoading(false);
-    });
+    Promise.all([api.recurring(), api.anomalies(), api.recommendations(), api.upcoming(), api.budgets()]).then(
+      ([r, a, rc, up, bg]) => {
+        setRecurring(r.recurring);
+        setAnomalies(a.anomalies);
+        setRec(rc);
+        setUpcoming(up);
+        setBudgets(bg);
+        setLoading(false);
+      },
+    );
   }, []);
 
   if (loading) return <InsightsSkeleton />;
@@ -41,6 +45,8 @@ export function Insights(): JSX.Element {
   return (
     <div className="space-y-4">
       <h1 className="hidden md:block text-2xl font-semibold">Insights & recommendations</h1>
+
+      {budgets && budgets.items.length > 0 && <BudgetsCard report={budgets} onChange={setBudgets} />}
 
       {upcoming && upcoming.items.length > 0 && (
         <Card>
@@ -285,6 +291,83 @@ function InsightsSkeleton(): JSX.Element {
       </div>
       <Skeleton className="h-40 rounded-xl" />
       <Skeleton className="h-56 rounded-xl" />
+    </div>
+  );
+}
+
+/** Monthly category budgets: progress bar per category + an inline editable limit. */
+function BudgetsCard({ report, onChange }: { report: BudgetsReport; onChange: (r: BudgetsReport) => void }): JSX.Element {
+  const cur = report.currency;
+  const budgeted = report.items.filter((b) => b.limit > 0);
+  const totalLimit = budgeted.reduce((s, b) => s + b.limit, 0);
+  const totalSpent = budgeted.reduce((s, b) => s + b.spent, 0);
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="font-medium">🎯 Budgets</h3>
+        {totalLimit > 0 && (
+          <span className={`tnum text-sm ${totalSpent > totalLimit ? 'text-expense' : 'text-muted'}`}>
+            {formatMoney(totalSpent, cur)} / {formatMoney(totalLimit, cur)}
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-muted mb-3">Set a monthly limit per category — leave blank to remove.</p>
+      <div className="space-y-2.5">
+        {report.items.map((b) => (
+          <BudgetRow key={b.category} b={b} cur={cur} onSaved={onChange} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function BudgetRow({
+  b,
+  cur,
+  onSaved,
+}: {
+  b: BudgetsReport['items'][number];
+  cur: string;
+  onSaved: (r: BudgetsReport) => void;
+}): JSX.Element {
+  const [value, setValue] = useState(b.limit > 0 ? String(b.limit) : '');
+  const [busy, setBusy] = useState(false);
+  const color = categoryColor(b.category);
+  const pct = b.limit > 0 ? Math.min(100, b.pct) : 0;
+  async function save(): Promise<void> {
+    const n = Number(value);
+    if ((b.limit === 0 && !value) || n === b.limit) return;
+    setBusy(true);
+    try {
+      onSaved(await api.setBudget(b.category, Number.isFinite(n) ? n : 0));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div>
+      <div className="flex items-center gap-2 text-sm mb-1">
+        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: color }} />
+        <span className="flex-1 truncate">{b.category}</span>
+        <span className={`tnum text-xs ${b.over ? 'text-expense' : 'text-muted'}`}>
+          {formatMoney(b.spent, cur)}{b.limit > 0 ? ` / ${formatMoney(b.limit, cur)}` : ''}
+        </span>
+        <input
+          className="input w-20 !mt-0 text-xs text-right"
+          inputMode="numeric"
+          placeholder="limit"
+          value={value}
+          disabled={busy}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={save}
+          onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+        />
+      </div>
+      {b.limit > 0 && (
+        <div className="h-2 bg-panel2 rounded-full overflow-hidden">
+          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: b.over ? 'var(--expense)' : color }} />
+        </div>
+      )}
     </div>
   );
 }

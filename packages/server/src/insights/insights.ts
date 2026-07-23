@@ -2,6 +2,7 @@ import { getSetting } from '../db/db.js';
 import { allPrimary } from '../repo/transactions.js';
 import { listAlerts } from '../dedup/engine.js';
 import { getBankBalances } from '../repo/balances.js';
+import { listBudgets } from '../repo/budgets.js';
 import type { SourceType, Transaction } from '../models/types.js';
 
 const MS_DAY = 86_400_000;
@@ -290,6 +291,60 @@ export function buildUpcoming(days = 45): UpcomingReport {
     total: round2(bills.reduce((s, r) => s + r.currentAmount, 0)),
     startingBalance: startingBalance != null ? round2(startingBalance) : null,
     lowPoint,
+  };
+}
+
+export interface BudgetStatus {
+  category: string;
+  limit: number; // 0 = no budget set (a suggestion row)
+  spent: number; // this calendar month, in base currency
+  remaining: number;
+  pct: number; // spent / limit * 100 (0 when no limit)
+  over: boolean;
+}
+export interface BudgetsReport {
+  currency: string;
+  month: string;
+  items: BudgetStatus[];
+  totalLimit: number;
+  totalSpent: number;
+}
+
+/**
+ * Budget progress for the current calendar month: every budgeted category plus
+ * the top unbudgeted spenders (limit 0, so the user can set one). Expense-only,
+ * base currency, transfers/loans excluded via isExpense.
+ */
+export function buildBudgets(): BudgetsReport {
+  const base = getSetting<string>('currency', 'ILS');
+  const month = new Date().toISOString().slice(0, 7);
+  const txns = allPrimary().filter((t) => t.currency === base && isExpense(t) && monthKey(t.date) === month);
+  const spentByCat = new Map<string, number>();
+  for (const t of txns) {
+    const c = t.category ?? 'Uncategorized';
+    spentByCat.set(c, (spentByCat.get(c) ?? 0) + mag(t));
+  }
+  const budgets = new Map(listBudgets().map((b) => [b.category, b.monthly_limit]));
+
+  const categories = new Set<string>([...budgets.keys(), ...spentByCat.keys()]);
+  const items: BudgetStatus[] = [...categories]
+    .map((category) => {
+      const limit = budgets.get(category) ?? 0;
+      const spent = round2(spentByCat.get(category) ?? 0);
+      const remaining = round2(limit - spent);
+      const pct = limit > 0 ? Math.round((spent / limit) * 100) : 0;
+      return { category, limit, spent, remaining, pct, over: limit > 0 && spent > limit };
+    })
+    // Budgeted categories first, then biggest spenders; drop zero-spend unbudgeted noise.
+    .filter((b) => b.limit > 0 || b.spent > 0)
+    .sort((a, b) => Number(b.limit > 0) - Number(a.limit > 0) || b.spent - a.spent);
+
+  return {
+    currency: base,
+    month,
+    items,
+    totalLimit: round2([...budgets.values()].reduce((s, v) => s + v, 0)),
+    totalSpent: round2([...spentByCat.values()].reduce((s, v) => s + v, 0)),
   };
 }
 

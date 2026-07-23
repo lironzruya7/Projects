@@ -149,6 +149,22 @@ export interface UpcomingReport {
   lowPoint: { date: string; balance: number } | null;
 }
 
+export interface BudgetStatus {
+  category: string;
+  limit: number;
+  spent: number;
+  remaining: number;
+  pct: number;
+  over: boolean;
+}
+export interface BudgetsReport {
+  currency: string;
+  month: string;
+  items: BudgetStatus[];
+  totalLimit: number;
+  totalSpent: number;
+}
+
 export interface Anomaly {
   type: 'spike' | 'new_merchant' | 'double_charge';
   transactionId?: string;
@@ -375,6 +391,9 @@ export const api = {
   },
   recurring: () => req<{ recurring: RecurringItem[] }>('/api/insights/recurring'),
   upcoming: () => req<UpcomingReport>('/api/insights/upcoming'),
+  budgets: () => req<BudgetsReport>('/api/budgets'),
+  setBudget: (category: string, limit: number) =>
+    req<BudgetsReport>(`/api/budgets/${encodeURIComponent(category)}`, { method: 'PUT', body: JSON.stringify({ limit }) }),
   anomalies: () => req<{ anomalies: Anomaly[] }>('/api/insights/anomalies'),
   recommendations: () => req<RecommendationReport>('/api/insights/recommendations'),
   accounts: () => req<{ accounts: Account[] }>('/api/accounts'),

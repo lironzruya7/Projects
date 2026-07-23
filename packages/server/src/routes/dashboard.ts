@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { buildDashboard, detectAnomalies, detectRecurring, buildUpcoming } from '../insights/insights.js';
+import { buildDashboard, detectAnomalies, detectRecurring, buildUpcoming, buildBudgets } from '../insights/insights.js';
 import { buildRecommendations } from '../insights/recommend.js';
 import { distinctMerchants, listAccounts, listCurrencies } from '../repo/transactions.js';
+import { setBudget } from '../repo/budgets.js';
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/dashboard', async (req) => {
@@ -22,6 +23,15 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/insights/anomalies', async () => ({ anomalies: detectAnomalies() }));
 
   app.get('/api/insights/upcoming', async () => buildUpcoming());
+
+  app.get('/api/budgets', async () => buildBudgets());
+
+  app.put('/api/budgets/:category', async (req) => {
+    const { category } = req.params as { category: string };
+    const body = z.object({ limit: z.number().min(0) }).parse(req.body);
+    setBudget(category, body.limit);
+    return buildBudgets();
+  });
 
   app.get('/api/insights/merchants', async () => ({ merchants: distinctMerchants() }));
 
