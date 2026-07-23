@@ -245,6 +245,21 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now cyber-exec egress-firewall
 ```
 
+**Host access (optional SSH lockdown):** the box's `/api/exec` is already
+tailnet-only. To also restrict **SSH** to the tailnet (drop public TCP 22, shrink
+the public attack surface), `deploy/lockdown-ssh.sh` does it safely — a
+`tailnet-reachable?` pre-check that refuses if it would lock you out, plus a
+dead-man's-switch auto-rollback. Keep the Hostinger console open and disable
+Tailscale key expiry first.
+
+```bash
+sudo ./deploy/lockdown-ssh.sh check       # tailnet path usable? (no changes)
+sudo ./deploy/lockdown-ssh.sh lockdown    # apply, auto-reverts in GRACE s unless confirmed
+#  verify from another tailnet node:  ssh root@<tailnet-ip>
+sudo ./deploy/lockdown-ssh.sh confirm     # cancel auto-revert
+sudo ./deploy/lockdown-ssh.sh persist     # survive reboot
+```
+
 **Workdir / `files`:** each request writes its `files[]` into a throwaway workdir
 bind-mounted to `/work`, under **`CYBER_EXEC_WORKROOT`** (systemd:
 `/var/lib/cyber-exec/work`; `run.sh`: `<repo>/.work`). It **must** be a real host
@@ -331,6 +346,7 @@ Hard-won gotchas from building this on a live Kali/Tailscale/Docker box:
 | `deploy/egress-firewall.sh` + `.service` | Source-scoped egress firewall + boot re-apply |
 | `deploy/wg0.conf.example` | WireGuard template (no default-route takeover) |
 | `deploy/vpn-egress.sh` | iVPN egress lifecycle (install/dry-run/up/down/status) |
+| `deploy/lockdown-ssh.sh` | Restrict SSH to the tailnet (safe pre-check + dead-man's-switch) |
 | `scripts/smoke_test.sh` | Base end-to-end smoke |
 | `scripts/smoke_offensive.sh` | Offensive tooling smoke |
 | `scripts/smoke_heavy.sh` + `scripts/ghidra/DecompileFirst.py` | Heavy image smoke |
