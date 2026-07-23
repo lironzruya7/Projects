@@ -99,6 +99,13 @@ VOL_SYMBOL_MOUNT = "/opt/vol-symbols"
 # The subnet here MUST match deploy/egress-firewall.sh's EGRESS_SUBNET.
 EGRESS_NETWORK = os.environ.get("SEC_TOOLBOX_EGRESS_NETWORK", "cyberexec-egress")
 EGRESS_SUBNET = os.environ.get("SEC_TOOLBOX_EGRESS_SUBNET", "172.31.255.0/24")
+# Optional MTU for the egress network. REQUIRED when routing egress through the
+# VPN (WireGuard): the tunnel's MTU is ~1420, so a default 1500 container emits
+# oversized DF packets (e.g. the TLS ClientHello) that the tunnel silently drops
+# — an MTU black hole where small requests work but HTTPS hangs. Set to 1280
+# (safe minimum) for VPN egress. Empty (default) keeps docker's 1500. Changing
+# it requires recreating the network (docker network rm + app restart).
+EGRESS_MTU = os.environ.get("SEC_TOOLBOX_EGRESS_MTU", "").strip()
 # Optional explicit DNS for egress containers. REQUIRED when routing egress
 # through the VPN (WireGuard): the embedded docker resolver forwards DNS from
 # the HOST, which would leak out the host's real route — a direct `--dns` from
@@ -522,12 +529,18 @@ def _ensure_egress_network() -> None:
         )
         if res.returncode == 0:
             return
+        create = [DOCKER_BIN, "network", "create", "--driver", "bridge",
+                  "--subnet", EGRESS_SUBNET]
+        # MTU matters for VPN egress (tunnel < 1500); see EGRESS_MTU note above.
+        if EGRESS_MTU:
+            create += ["-o", f"com.docker.network.driver.mtu={EGRESS_MTU}"]
+        create.append(EGRESS_NETWORK)
         subprocess.run(
-            [DOCKER_BIN, "network", "create", "--driver", "bridge",
-             "--subnet", EGRESS_SUBNET, EGRESS_NETWORK],
+            create,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30, check=False,
         )
-        log.info("ensured egress network %s (%s)", EGRESS_NETWORK, EGRESS_SUBNET)
+        log.info("ensured egress network %s (%s, mtu=%s)",
+                 EGRESS_NETWORK, EGRESS_SUBNET, EGRESS_MTU or "default")
     except Exception as exc:  # pragma: no cover - best effort
         log.warning("could not ensure egress network %s: %s", EGRESS_NETWORK, exc)
 

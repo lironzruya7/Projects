@@ -75,6 +75,23 @@ case "${1:-}" in
     systemctl enable "wg-quick@${WG_IFACE}" >/dev/null 2>&1 || true
     echo "== enabling fail-closed kill-switch via egress-firewall =="
     EGRESS_VPN=1 WG_IFACE="$WG_IFACE" EGRESS_SUBNET="$EGRESS_SUBNET" bash "$FW" install
+    echo "== MTU / MSS belt-and-suspenders (the egress network MTU is the real"
+    echo "   fix — set SEC_TOOLBOX_EGRESS_MTU=1280 in the app .env; these are backup) =="
+    ip link set dev "$WG_IFACE" mtu "${WG_MTU:-1280}" 2>/dev/null || true
+    # Clamp TCP MSS in BOTH directions on the tunnel (--tcp-flags SYN,RST SYN
+    # matches SYN *and* SYN-ACK; a --syn-only rule misses the server's SYN-ACK
+    # and the container keeps sending oversized segments).
+    for dir in "-o $WG_IFACE" "-i $WG_IFACE"; do
+      iptables -t mangle -C FORWARD $dir -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu -m comment --comment cyber-exec-mss 2>/dev/null \
+        || iptables -t mangle -A FORWARD $dir -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu -m comment --comment cyber-exec-mss
+    done
+    # Masquerade egress-subnet traffic to the tunnel IP, ahead of docker's rule.
+    iptables -t nat -C POSTROUTING -s "$EGRESS_SUBNET" -o "$WG_IFACE" -j MASQUERADE -m comment --comment cyber-exec-vpn-nat 2>/dev/null \
+      || iptables -t nat -I POSTROUTING 1 -s "$EGRESS_SUBNET" -o "$WG_IFACE" -j MASQUERADE -m comment --comment cyber-exec-vpn-nat
+    # Disable offload on the egress bridge (best-effort; bridge name is dynamic).
+    PREFIX=$(echo "$EGRESS_SUBNET" | cut -d/ -f1 | cut -d. -f1-3)
+    BR=$(ip -o -4 addr show 2>/dev/null | awk -v p="${PREFIX}." '$4 ~ ("^" p) {print $2; exit}')
+    [ -n "$BR" ] && ethtool -K "$BR" gro off gso off tso off 2>/dev/null || true
     echo "== done. Verify: sudo $0 status  &&  scripts/smoke_vpn.sh =="
     ;;
 

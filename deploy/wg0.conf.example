@@ -17,13 +17,23 @@ PrivateKey = <OWNER_PRIVATE_KEY_FROM_IVPN>
 Address    = <OWNER_TUNNEL_ADDRESS_FROM_IVPN>   # e.g. 172.20.0.2/32
 # --- routing scaffolding (do NOT change) ---
 Table      = 51820                              # custom table; never main/default
+MTU        = 1280                               # tunnel MTU (see also the egress
+                                                # NETWORK MTU — SEC_TOOLBOX_EGRESS_MTU=1280
+                                                # — which is the real black-hole fix)
 # No `DNS =` here on purpose — it would rewrite the HOST /etc/resolv.conf and can
 # break docker/host DNS. Egress containers get DNS via `docker --dns` instead
 # (set SEC_TOOLBOX_EGRESS_DNS in the app .env), routed through the tunnel.
 PostUp   = ip rule add pref 1000 from 172.31.255.0/24 lookup 51820
-PostUp   = iptables -t nat -A POSTROUTING -s 172.31.255.0/24 -o %i -j MASQUERADE
+PostUp   = iptables -t nat -I POSTROUTING 1 -s 172.31.255.0/24 -o %i -j MASQUERADE
+# MSS clamp BOTH directions on the tunnel (SYN and SYN-ACK) — insurance against
+# any oversized segment even beyond the network-MTU fix. `SYN,RST SYN` matches
+# SYN and SYN-ACK (a bare --syn misses the server's SYN-ACK).
+PostUp   = iptables -t mangle -A FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+PostUp   = iptables -t mangle -A FORWARD -i %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
 PostDown = ip rule del pref 1000 from 172.31.255.0/24 lookup 51820
 PostDown = iptables -t nat -D POSTROUTING -s 172.31.255.0/24 -o %i -j MASQUERADE
+PostDown = iptables -t mangle -D FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+PostDown = iptables -t mangle -D FORWARD -i %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
 
 [Peer]
 # --- from iVPN (owner) ---
