@@ -21,13 +21,16 @@ _Last updated: 2026-07-23_
   budgets, debts, history`.
 
 ## Open items (owner decisions / follow-ups)
-- **✅ Public exposure CLOSED (2026-07-23).** Was reachable on the Hostinger public IP
-  (`187.124.10.239:4000`). Owner ran: firewall (allow 4000 only on `tailscale0`, deny public) +
-  `tailscale serve` + deploy (now binds `127.0.0.1`). Verified from a phone on cellular (off the
-  tailnet): public `IP:4000` no longer loads. Access is now **`tailscale serve` only**.
-  - **CONFIRM STILL OPEN:** (a) `FINANCE_READ_TOKEN` **rotated**? It was reachable while the port
-    was public — treat as leaked; rotate on the box + update the OS `finance_report` config.
-    (b) tailnet access to `https://srv1814608.tail7d0828.ts.net` confirmed working.
+- **✅ Public exposure RESOLVED (2026-07-23).** Was reachable on the Hostinger public IP
+  (`187.124.10.239:4000`). All 5 steps done + verified: firewall (4000 only on `tailscale0`,
+  public denied) → `tailscale serve` → deploy (binds `127.0.0.1`) → **`FINANCE_READ_TOKEN`
+  rotated** (+ OS `finance_report` config updated) → verified public IP dead (phone on cellular)
+  and `https://srv1814608.tail7d0828.ts.net` works. Access is now **`tailscale serve` only**.
+- **Data verification (pending — do live, don't trust the build):** confirm `/api/export.json`
+  returns rows + `meta.notes`; delete emails + re-scan (fixed extractor); import the PayPal CSV;
+  re-tag the ₪75,000 Yahav loan `Transfers` → `Loan In`.
+- **Merge `claude/new-session-1bceap` → default branch** to make CLAUDE.md/STATE.md auto-load
+  permanent (features are already deployed from the branch).
 - **xlsx fix source.** Using `@e965/xlsx@0.20.3` (npm-native patched SheetJS) instead of the
   official CDN 0.20.x (CDN is policy-blocked in the dev env; npm-native is deploy-reliable).
   Owner may prefer the official CDN tarball — swap is one line if so.
@@ -48,6 +51,9 @@ curl -s -H "Authorization: Bearer $FINANCE_READ_TOKEN" \
 ```
 
 ## History (append newest first)
+- **2026-07-23** — 🔒 Closed a public-internet exposure of the finance app (Hostinger public
+  IP, port 4000 open). Firewalled to tailscale0, `tailscale serve`, redeployed on `127.0.0.1`,
+  rotated the read token. Verified closed externally (phone on cellular) + tailnet access works.
 - **2026-07-23** — Installed the operating brief (Option B): `CLAUDE.md` = stable brief +
   technical guide, this `STATE.md` = live state, SessionStart hook prints it + installs deps.
 - **2026-07-23** — Security hardening per brief: HOST default → `127.0.0.1`; added
