@@ -1,88 +1,62 @@
 # cyber-exec
 
-A minimal, **hardened** command-execution agent for a security-analysis VPS.
-
-It runs **one shell command per request** inside a **fresh, ephemeral Docker
+A minimal, **hardened** command-execution agent for a security-analysis VPS. It
+runs **one shell command per request** inside a **fresh, ephemeral Docker
 container** built from `sec-toolbox:latest`, then tears the container down and
-deletes the working directory. It is meant to be reachable **only over your
-tailnet** — bound to loopback and fronted by `tailscale serve`.
+deletes the working directory. It is reachable **only over your tailnet** —
+bound to loopback and fronted by `tailscale serve`, token-authed, and heavily
+sandboxed.
 
 ```
 tailnet client ──HTTPS──▶ tailscale serve :443 ──▶ 127.0.0.1:8000 (cyber-exec)
                                                         │  per request
+                            auth(401) → rate/concurrency(429)
                                                         ▼
-                                          docker run --rm  (fresh container)
-                                          --network none | bridge
-                                          --cap-drop ALL --no-new-privileges
-                                          -v <throwaway workdir>:/work
-                                          sec-toolbox:latest  bash -lc "<cmd>"
+                                    docker run --rm  (fresh container)
+                                    --network none | <egress-net>
+                                    --cap-drop ALL --no-new-privileges
+                                    --user runner -v <throwaway>:/work
+                                    sec-toolbox:latest  bash -lc "<cmd>"
 ```
 
-## Layout
+## Contents
+- [Quick start](#quick-start)
+- [API](#api)
+- [Security & hardening](#security--hardening)
+- [Throttling](#throttling-defense-in-depth)
+- [Images: base & heavy](#images-base--heavy)
+- [Egress isolation & firewall](#egress-isolation--firewall)
+- [VPN egress via iVPN (optional OPSEC)](#vpn-egress-via-ivpn-optional-opsec)
+- [Operations](#operations)
+- [Testing](#testing)
+- [Configuration reference](#configuration-reference)
+- [Troubleshooting / lessons learned](#troubleshooting--lessons-learned)
+- [Repository layout](#repository-layout)
 
-| Path | Purpose |
-|------|---------|
-| `app/main.py` | FastAPI service (`POST /api/exec`) |
-| `app/run.sh` | Start the service bound to `127.0.0.1:8000` |
-| `app/requirements.txt` | Python deps |
-| `docker/Dockerfile.sec-toolbox` | The lean default `sec-toolbox:latest` image |
-| `docker/Dockerfile.heavy` | Reserved, opt-in `sec-toolbox-heavy:latest` (Ghidra/Volatility3/…) |
-| `deploy/cyber-exec.service` | systemd unit |
-| `deploy/egress-firewall.sh` | Host firewall: restrict egress-mode to internet-only (+ optional VPN kill-switch) |
-| `deploy/egress-firewall.service` | Boot unit that re-applies the egress firewall |
-| `deploy/wg0.conf.example` | WireGuard template to route egress via iVPN (no default-route takeover) |
-| `deploy/vpn-egress.sh` | Bring egress out through iVPN, fail-closed (install/dry-run/up/down/status) |
-| `scripts/smoke_vpn.sh` | Smoke test for VPN egress (exit IP, kill-switch, isolation, Tailscale intact) |
-| `scripts/smoke_test.sh` | End-to-end smoke test (base) |
-| `scripts/smoke_heavy.sh` | Smoke test for the heavy image |
-| `scripts/smoke_offensive.sh` | Smoke test for the offensive tooling (base) |
-| `scripts/verify_egress.sh` | Post-change regression check (egress firewall + isolation) |
-| `.env.example` | Token + optional overrides |
+---
 
-## Setup
-
-### 1. Build the toolbox image
+## Quick start
 
 ```bash
+# 1. Build the lean toolbox image
 docker build -t sec-toolbox:latest -f docker/Dockerfile.sec-toolbox docker/
-```
 
-Included: `nmap`, `masscan`, `whois`, `dnsutils`, `ffuf`, `nuclei`, `nikto`,
-`feroxbuster`, `hydra`, `whatweb`, `sqlmap`, `testssl.sh`, `curl`, `jq`,
-`binwalk`, `yara`, `radare2`, `exiftool`, `oletools`, `pdfid`/`pdf-parser`,
-`tshark`, `python3` + `requests` (and `httpx` if the Kali package is present).
-(Volatility3 + Ghidra + metasploit are intentionally left for the heavier
-optional image.)
-
-**Offensive tooling & offline nuclei templates:** the offensive tools are gated
-exactly like everything else — OS-side approval + scope-guard, egress firewall,
-and the ephemeral `--cap-drop ALL` / `--network none` / `--rm` container;
-installing them relaxes nothing. **nuclei templates are baked at build time** so
-scans work with `--network none`: they live at `$NUCLEI_TEMPLATES`
-(`/opt/nuclei-templates`); pass `-t $NUCLEI_TEMPLATES` (and `-disable-update-check`)
-when invoking nuclei offline. Smoke: `scripts/smoke_offensive.sh`.
-
-### 2. Configure the token
-
-```bash
+# 2. Configure the token
 cp .env.example .env
 python3 -c "import secrets; print('CYBER_EXEC_TOKEN=' + secrets.token_urlsafe(48))" >> .env
-# then edit .env to remove the placeholder line
-```
 
-### 3. Run the service
-
-```bash
+# 3. Run the service (binds 127.0.0.1:8000 ONLY)
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r app/requirements.txt
-./app/run.sh          # binds 127.0.0.1:8000 ONLY
-```
+./app/run.sh
 
-### 4. Expose on the tailnet (never public)
-
-```bash
+# 4. Expose on the tailnet (never public)
 tailscale serve --bg --https=443 http://127.0.0.1:8000
 ```
+
+For a persistent install use the systemd unit — see [Operations](#operations).
+
+---
 
 ## API
 
@@ -90,237 +64,276 @@ tailscale serve --bg --https=443 http://127.0.0.1:8000
 
 Headers: `Authorization: Bearer <CYBER_EXEC_TOKEN>`
 
-Request:
-
 ```json
 {
   "command": "nmap -sV -Pn scanme.nmap.org",
   "network": "none",
   "timeout": 120,
-  "files": [{ "name": "sample.bin", "b64": "..." }]
+  "files": [{ "name": "sample.bin", "b64": "..." }],
+  "raw": false,
+  "image": "base"
 }
 ```
 
 | Field | Type | Notes |
 |-------|------|-------|
 | `command` | string | Runs as `bash -lc "<command>"` in `/work` |
-| `network` | `"none"` \| `"egress"` | **Default `none`** (isolated detonation). `egress` = bridge networking |
-| `timeout` | int | Seconds, `5..600`. Container is killed on overrun |
-| `files` | array (optional) | `{name, b64}`; base64-decoded into `/work`. `name` must be a plain basename |
-| `raw` | bool (optional) | **Default `false`**. When `true` **and** `network == "egress"`, adds **only** `--cap-add NET_RAW` (for `nmap -sS`, `masscan`, etc.). Ignored under `network: "none"`. No other capability is ever added |
-| `image` | `"base"` \| `"heavy"` (optional) | **Default `"base"`** (lean, fast). `"heavy"` uses the reserved RE/forensics image. Absent/unknown/wrong-type → falls back to `base` (never errors) |
-
-`timeout` defaults and caps are **per image**: base = default `60`, cap `600`;
-heavy = default `300`, cap `1800`. Omit `timeout` to take the image default; a
-value above the image cap is clamped down (never an error).
+| `network` | `"none"` \| `"egress"` | **Default `none`** (isolated detonation); `egress` uses the dedicated egress network |
+| `timeout` | int (optional) | Seconds. Per-image default & cap (base `60`/`600`, heavy `300`/`1800`); omit for default, over-cap is clamped |
+| `files` | array (optional) | `{name, b64}` base64-decoded into `/work`; `name` must be a plain basename (no traversal) |
+| `raw` | bool (optional) | **Default `false`**. `true` **and** `network:"egress"` adds **only** `--cap-add NET_RAW` (e.g. `nmap -sS`, `masscan`). Ignored under `none` |
+| `image` | `"base"` \| `"heavy"` (optional) | **Default `base`** (lean). `heavy` = RE/forensics image. Absent/unknown/wrong-type → `base` (never errors) |
 
 Response:
 
 ```json
-{
-  "ok": true,
-  "exit_code": 0,
-  "stdout": "...",
-  "stderr": "...",
-  "timed_out": false,
-  "duration_s": 3.42
-}
+{ "ok": true, "exit_code": 0, "stdout": "...", "stderr": "...", "timed_out": false, "duration_s": 3.42 }
 ```
 
-- `401` — missing/invalid bearer token (constant-time compare).
-- `429` — throttled (see below). Body `{"error": "...", "retry_after": N}` with a
-  `Retry-After` header. No container is spun for a rejected request.
-- `503` — `CYBER_EXEC_TOKEN` not configured (fails closed).
-- `422` — schema validation failure (unsafe file name, `timeout` out of
-  `5..600`, bad `network` value).
-- `400` — file `b64` is not valid base64.
-- stdout/stderr are each capped at ~1 MB.
+Status codes: `401` bad/missing token (constant-time) · `429` throttled
+(`{"error","retry_after"}` + `Retry-After`; no container spun) · `503` token not
+configured (fails closed) · `422` schema (unsafe name / bad `network`) · `400`
+bad base64. stdout/stderr are each capped at ~1 MB. `/healthz` is unauthenticated
+and exempt from throttling.
 
-## Throttling (defense-in-depth)
+---
 
-`cyber_exec` is approval-gated on the OS side, **not** on the VPS — the VPS
-trusts only the bearer token. So if the token leaks, an attacker could hit
-`/api/exec` directly and spin unlimited containers. The Tailscale ACL limits
-**who** can reach the service; these in-process limits cap **how much**:
-
-- **Rate limit** — token-bucket **per bearer token**, checked *before* spinning
-  a container. `EXEC_RATE_PER_MIN=30`, `EXEC_RATE_BURST=10`.
-- **Concurrency cap** — hard ceiling on simultaneous containers,
-  `EXEC_MAX_CONCURRENCY=3`. Acquired before `docker run`, released in `finally`
-  (frees on success, timeout, or crash) — **fail closed**, never exceeds N.
-- Optional coarse **per-IP** rate (`EXEC_IP_RATE_PER_MIN`, default `0`/off) to
-  blunt token brute-force, applied pre-auth.
-
-Order: **auth (`401`) → rate/concurrency (`429`)**. `/healthz` is exempt and
-answers even while saturated. Overflow returns `429` with `Retry-After` and a
-`{"error","retry_after"}` body — no internals leaked, no container spun.
-
-> These counters are **in-memory**, so the service **must stay single-worker**
-> (`--workers 1`, as shipped in `run.sh` and the systemd unit). Multiple workers
-> would each keep their own counters and break the caps.
-
-## Hardening
+## Security & hardening
 
 Every container runs with:
 
-- `--network none` **by default** (only `bridge` when `network: "egress"`).
-- `--cap-drop ALL` and `--security-opt no-new-privileges`. The **only**
-  capability that can be added back is `NET_RAW`, and only when the caller
-  explicitly sets `raw: true` together with `network: "egress"` — never
-  otherwise.
-- `--pids-limit 512 --memory 2g --cpus 2`.
-- `--user runner` (**non-root** inside the container).
-- Only the **throwaway workdir** is mounted (`-v <workdir>:/work:rw`). No other
-  host paths are ever mounted.
-- `--rm` plus an explicit `docker rm -f` and `rmtree` in `finally` — **no
-  persistence** between runs.
+- `--network none` **by default** (only the dedicated egress network when `network:"egress"`).
+- `--cap-drop ALL` + `--security-opt no-new-privileges`. The **only** capability
+  ever added back is `NET_RAW`, and only with `raw:true` **and** `network:"egress"`.
+- `--pids-limit 512`, per-image `--memory` / `--cpus` (cpus clamped to host count).
+- `--user runner` (**non-root** inside).
+- Only the **throwaway workdir** is mounted (`-v <workdir>:/work:rw`) — plus one
+  optional read-only Volatility symbol cache on heavy. No docker socket, no other host paths.
+- `--rm` + explicit `docker rm -f` + `rmtree` in `finally` — **no persistence**.
+  A startup sweep removes workdirs/containers orphaned by SIGKILL/OOM.
 - The container is **never** added to the tailnet.
-
-Egress isolation (important):
-
-- `network: "none"` (the default) = no network at all — fully isolated.
-- `network: "egress"` runs the container on a **dedicated** docker network
-  (`cyberexec-egress`, `172.31.255.0/24`, created automatically at startup), not
-  the shared default bridge. That network still routes through the host, so
-  without filtering a container could reach the **tailnet** (`100.64.0.0/10`),
-  the private **LAN** (RFC1918) and cloud **metadata** (`169.254.169.254`).
-  `sudo deploy/egress-firewall.sh install` restricts it to the public internet
-  only, with rules scoped by that network's **source subnet** — so `docker
-  build` and any other containers are never affected. Tailnet DROP is in
-  `DOCKER-USER`; host-local MagicDNS is dropped in `raw/PREROUTING` (tailscale
-  DNATs it before FORWARD/INPUT). To survive reboots and Docker restarts (which
-  flush the rules), install `deploy/egress-firewall.service`
-  (`PartOf=docker.service`). The firewall's `EGRESS_SUBNET` must match the app's
-  `SEC_TOOLBOX_EGRESS_SUBNET`.
-
-Robustness:
-
-- On startup the service sweeps stale `cyber-exec-*` workdirs and dangling
-  `cyberexec-*` containers left by a hard-killed run (`finally` teardown does
-  not run on SIGKILL/OOM/power loss).
-- Workdir teardown falls back to a root-container wipe for container-created
-  subdirs the service user can't remove, and logs a LEAK if anything survives.
 
 Service-level:
 
 - Binds `127.0.0.1:8000` only; tailnet exposure via `tailscale serve`.
-- Bearer-token auth with `hmac.compare_digest` (constant-time), token read
-  from `.env` and **never logged**. Commands *are* logged locally.
+- Bearer auth with `hmac.compare_digest` (constant-time); token read from `.env`,
+  **never logged** (commands *are* logged locally).
 - `deploy/cyber-exec.service` adds `NoNewPrivileges`, `ProtectSystem=strict`,
-  `PrivateTmp`, etc. for the service process itself.
+  `StateDirectory`, etc. for the service process.
 
-## Heavy image (`sec-toolbox-heavy:latest`) — reserved, opt-in
+---
 
-The lean `sec-toolbox:latest` stays the **default** for fast spin-up. A separate
-`sec-toolbox-heavy:latest` (from `docker/Dockerfile.heavy`) adds RE/forensics
-tooling and is **only** used when a request sets `{"image":"heavy"}`. It is
-built **FROM** the base, so it is literally base + additions; the base build and
-tag are never modified.
+## Throttling (defense-in-depth)
 
-Heavy adds: **OpenJDK 21**, **Ghidra** (headless only — `analyzeHeadless` on
-`PATH`, no GUI), **Volatility3**, plus **yara** (already in base), **capa**,
-**floss**. No GUI/Android tooling. No Windows symbol packs are baked in — vol3
-resolves ISF symbols from an optional, pre-populated cache (see below).
+`cyber_exec` is approval-gated on the OS side, **not** on the VPS — the VPS trusts
+only the bearer token. If the token leaks, these in-process limits cap **how much**
+a holder can do (the Tailscale ACL limits **who** can reach it):
 
-Build order (base first, then heavy):
+- **Rate limit** — token-bucket per bearer token, before spinning a container
+  (`EXEC_RATE_PER_MIN=30`, `EXEC_RATE_BURST=10`).
+- **Concurrency cap** — hard ceiling (`EXEC_MAX_CONCURRENCY=3`), acquired before
+  `docker run`, released in `finally` — fail-closed, never exceeds N.
+- Optional coarse **per-IP** rate (`EXEC_IP_RATE_PER_MIN`, default off), pre-auth.
+
+Order: **auth (`401`) → rate/concurrency (`429`)**. Rejections spin no container.
+
+> Counters are **in-memory** ⇒ the service **must stay single-worker** (`--workers 1`,
+> as shipped). Multiple workers would each keep their own counters and break the caps.
+
+---
+
+## Images: base & heavy
+
+### `sec-toolbox:latest` (default, lean, Kali base)
+
+`nmap`, `masscan`, `whois`, `dnsutils`, `nikto`, `ffuf`, `nuclei`,
+`feroxbuster`, `hydra`, `whatweb`, `sqlmap`, `testssl.sh`, `curl`, `jq`,
+`binwalk`, `yara`, `radare2`, `exiftool`, `oletools`, `pdfid`/`pdf-parser`
+(SHA-256 pinned), `tshark`, `python3`+`requests` (and `httpx` if the Kali
+package is present).
+
+**Offensive tooling** is gated exactly like everything else (OS approval +
+scope-guard, egress firewall, ephemeral `--cap-drop ALL`/`--network none`/`--rm`
+container) — installing relaxes nothing. **nuclei templates are baked at build
+time** (`git clone` → `$NUCLEI_TEMPLATES` = `/opt/nuclei-templates`) so scans run
+offline under `--network none`; invoke `nuclei -t $NUCLEI_TEMPLATES -disable-update-check`.
+
+### `sec-toolbox-heavy:latest` (reserved, opt-in `image:"heavy"`)
+
+Built **FROM** the base (= base + additions; the base tag is never modified).
+Adds **OpenJDK 21**, **Ghidra** (headless — `analyzeHeadless` on `PATH`, no GUI),
+**Volatility3**, plus **capa**/**floss**. No GUI/Android tooling. No Windows
+symbol packs baked in.
 
 ```bash
 docker build -t sec-toolbox:latest -f docker/Dockerfile.sec-toolbox docker/
-# GHIDRA_SHA256 is REQUIRED (integrity-verified build; get it from the Ghidra
-# release page). The build fails without it.
+# GHIDRA_SHA256 is REQUIRED (integrity-verified build):
 docker build -t sec-toolbox-heavy:latest -f docker/Dockerfile.heavy docker/ \
   --build-arg GHIDRA_SHA256=<sha256 from the Ghidra release page>
-# If the pinned Ghidra asset 404s (superseded), also override:
-#   --build-arg GHIDRA_VERSION=<x.y.z> --build-arg GHIDRA_DATE=<YYYYMMDD>
+# If the pinned asset 404s: also --build-arg GHIDRA_VERSION=x.y.z GHIDRA_DATE=YYYYMMDD
 ```
 
-The `pdfid`/`pdf-parser` scripts in the base image are pinned by SHA-256, so a
-tampered/changed upstream fails the build (bump the `*_SHA256` build-args after
-reviewing a legitimate upstream change).
-
-**Resource envelope** (per image; base untouched):
+Resource envelope (per image; base untouched; `--cpus` clamped to host):
 
 | image | memory | cpus | timeout default | timeout cap |
 |-------|--------|------|-----------------|-------------|
 | base  | 2g     | 2    | 60s             | 600s        |
 | heavy | 4g     | 4    | 300s            | 1800s       |
 
-`--cpus` is clamped to the host's CPU count, so the heavy profile asking for `4`
-on a 2-CPU box runs with `2` instead of failing (`docker` errors hard if asked
-for more CPUs than exist). On larger hardware it uses the full value.
+**Volatility3 symbol cache (optional):** `SEC_TOOLBOX_VOL_CACHE=<host dir>` →
+bind-mounted **read-only** at `/opt/vol-symbols` in the heavy container only;
+pre-populate offline.
 
-**Security is identical to base** and non-negotiable: `--network none` is still
-the **default** for heavy (RE/forensics is offline; egress is opt-in + `raw`
-exactly as base), `--cap-drop ALL`, non-root (`uid 999`), `--rm`, rlimits, and
-**no host mounts beyond the ephemeral `/work`** — plus one optional, read-only
-Volatility symbol cache.
+---
 
-**Volatility3 symbol cache (optional):** set `SEC_TOOLBOX_VOL_CACHE=<host dir>`.
-When set, it is bind-mounted **read-only** at `/opt/vol-symbols` in the heavy
-container *only*. Pre-populate it offline (network is `none` at analysis time).
+## Egress isolation & firewall
 
-**Smoke** (run on the box after building; see `scripts/smoke_heavy.sh`):
+- `network:"none"` (default) = **no network at all** — fully isolated.
+- `network:"egress"` runs the container on a **dedicated** docker network
+  (`cyberexec-egress`, `172.31.255.0/24`, created at startup), not the shared
+  default bridge — so the firewall is scoped by **source subnet** and `docker
+  build` / other containers are never affected.
+- `sudo deploy/egress-firewall.sh install` restricts egress to the **public
+  internet only**: DROP tailnet (`100.64.0.0/10`) / RFC1918 / metadata
+  (`169.254.169.254`) in `DOCKER-USER`; host-local **MagicDNS** (`100.100.100.100`)
+  in `raw/PREROUTING` (tailscale DNATs it before FORWARD/INPUT).
+- Install `deploy/egress-firewall.service` (`PartOf=docker.service`) to re-apply
+  across reboots and docker restarts. The firewall's `EGRESS_SUBNET` must match
+  the app's `SEC_TOOLBOX_EGRESS_SUBNET`.
 
-```bash
-CYBER_EXEC_TOKEN=... ./scripts/smoke_heavy.sh [base_url] [linux_dump_path]
-```
-
-Covers: (a) `analyzeHeadless` decompiles a small binary → pseudo-C; (b) `vol -h`
-(+ `linux.pslist` on a provided dump); (c) re-confirms non-root, `--network
-none`, and no network reachable.
+---
 
 ## VPN egress via iVPN (optional OPSEC)
 
-Route **only** the egress network (`172.31.255.0/24`) out through iVPN
-(WireGuard) so authorized scans exit from the VPN IP, not the VPS's real IP.
-**This is OPSEC, not authorization** — the OS-side scope-guard and
-authorization-first are unchanged; a VPN never permits an unauthorized target.
-Everything is **off by default**; enabling it is a deliberate step.
-
-Key properties (see `deploy/wg0.conf.example` + `deploy/vpn-egress.sh`):
+Route **only** the egress network out through iVPN (WireGuard) so authorized
+scans exit from the VPN IP, not the VPS's real IP. **This is OPSEC, not
+authorization** — the OS scope-guard is unchanged; a VPN never permits an
+unauthorized target. **Off by default.**
 
 - **No default-route takeover.** WireGuard's `0.0.0.0/0` goes into a **custom
   table (51820)**; a source `ip rule` (`from 172.31.255.0/24`, pref 1000) makes
-  only the egress subnet use it. The host's own traffic — **Tailscale, image
-  pulls, and the OS → `/api/exec` path** — stays on the main route. This is what
-  keeps Tailscale from breaking.
+  only the egress subnet use it. Tailscale, image pulls, and the OS → `/api/exec`
+  path stay on the main route.
 - **Fail-closed kill-switch.** `EGRESS_VPN=1` adds a `DOCKER-USER` rule dropping
-  any egress-subnet packet not leaving via `wg0` — tunnel down ⇒ **zero egress,
-  no leak to the real IP**. It lives in the firewall (persisted via the boot
-  unit + `/etc/cyber-exec/egress.env`), **not** in `wg-quick` PostDown, so it
-  survives the tunnel going down.
-- **DNS through the tunnel.** Egress containers use `--dns` (set
-  `SEC_TOOLBOX_EGRESS_DNS=1.1.1.1`) instead of the host-forwarded embedded
-  resolver, so DNS doesn't leak. No `DNS=` in `wg0.conf` (that would rewrite the
-  host resolver).
-- The existing destination DROPs (tailnet / RFC1918 / metadata / MagicDNS) stay
-  and still apply — a container cannot reach the tailnet, VPN or not.
+  any egress-subnet packet not leaving via `wg0` — tunnel down ⇒ zero egress, no
+  leak. Persisted via the boot unit + `/etc/cyber-exec/egress.env`, independent
+  of the `wg0` lifecycle.
+- **DNS + MTU through the tunnel.** Egress containers use `--dns`
+  (`SEC_TOOLBOX_EGRESS_DNS=1.1.1.1`) so DNS doesn't leak, and the egress network
+  MTU is **1280** (`SEC_TOOLBOX_EGRESS_MTU`) to avoid the tunnel MTU black hole
+  (see [Troubleshooting](#troubleshooting--lessons-learned)).
 
 Bring-up (scaffolding first, real iVPN keys last):
 
 ```bash
 sudo ./deploy/vpn-egress.sh install     # wireguard-tools (no keys)
 sudo ./deploy/vpn-egress.sh dry-run     # validate ip-rule + kill-switch (no keys, non-mutating)
-# owner: put real iVPN config at /etc/wireguard/wg0.conf (see wg0.conf.example),
-# and set SEC_TOOLBOX_EGRESS_DNS=1.1.1.1 in .env, then restart the service
+# owner: put real iVPN config at /etc/wireguard/wg0.conf (see wg0.conf.example);
+#        set SEC_TOOLBOX_EGRESS_DNS=1.1.1.1 and SEC_TOOLBOX_EGRESS_MTU=1280 in .env; restart service
 sudo ./deploy/vpn-egress.sh up          # tunnel up + kill-switch on
 CYBER_EXEC_TOKEN=... sudo -E ./scripts/smoke_vpn.sh
 ```
 
-## Workdir root & `files`
+---
 
-Each request writes its `files[]` into a throwaway workdir that is bind-mounted
-to `/work` inside the container. That workdir lives under **`CYBER_EXEC_WORKROOT`**
-(systemd: `/var/lib/cyber-exec/work`; `run.sh`: `<repo>/.work`).
+## Operations
 
-It must be a **real host path the Docker daemon can see** — do **not** place it
-under a systemd `PrivateTmp` `/tmp`. The daemon resolves the bind-mount source
-in its own mount namespace, so a private `/tmp` would mount an *empty* `/work`
-and uploaded files would be missing. The shipped unit therefore uses
-`StateDirectory=cyber-exec` and no `PrivateTmp`.
+**systemd:**
+```bash
+sudo cp deploy/cyber-exec.service deploy/egress-firewall.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now cyber-exec egress-firewall
+```
 
-## Test
+**Workdir / `files`:** each request writes its `files[]` into a throwaway workdir
+bind-mounted to `/work`, under **`CYBER_EXEC_WORKROOT`** (systemd:
+`/var/lib/cyber-exec/work`; `run.sh`: `<repo>/.work`). It **must** be a real host
+path the Docker daemon can see — **not** a systemd `PrivateTmp` `/tmp`, or `/work`
+mounts empty. The unit uses `StateDirectory=cyber-exec` and no `PrivateTmp`.
+
+---
+
+## Testing
 
 ```bash
-CYBER_EXEC_TOKEN=... ./scripts/smoke_test.sh
+CYBER_EXEC_TOKEN=... ./scripts/smoke_test.sh            # base: exec/files/timeout/egress
+CYBER_EXEC_TOKEN=... ./scripts/smoke_offensive.sh       # offensive tools + offline nuclei templates
+CYBER_EXEC_TOKEN=... ./scripts/smoke_heavy.sh [url] [dump]   # Ghidra decompile + vol3
+CYBER_EXEC_TOKEN=... sudo -E ./scripts/smoke_vpn.sh     # VPN exit IP, kill-switch, isolation, Tailscale intact
+CYBER_EXEC_TOKEN=... ./scripts/verify_egress.sh         # regression gate (run after any egress/firewall/network change)
 ```
+
+---
+
+## Configuration reference
+
+All via env / `.env` (see `.env.example`). Defaults shown.
+
+| Var | Default | Purpose |
+|-----|---------|---------|
+| `CYBER_EXEC_TOKEN` | *(required)* | Bearer token; service fails closed if unset |
+| `CYBER_EXEC_WORKROOT` | `/var/lib/cyber-exec/work` | Host-visible throwaway-workdir root (never PrivateTmp) |
+| `SEC_TOOLBOX_IMAGE` / `_HEAVY_IMAGE` | `sec-toolbox:latest` / `-heavy:latest` | Image tags |
+| `SEC_TOOLBOX_MEMORY` / `_CPUS` / `_PIDS` | `2g` / `2` / `512` | Base limits |
+| `SEC_TOOLBOX_HEAVY_MEMORY` / `_CPUS` / `_TIMEOUT_DEFAULT` / `_TIMEOUT_CAP` | `4g` / `4` / `300` / `1800` | Heavy envelope |
+| `SEC_TOOLBOX_VOL_CACHE` | *(empty)* | RO Volatility symbol cache (heavy only) |
+| `SEC_TOOLBOX_EGRESS_NETWORK` / `_SUBNET` | `cyberexec-egress` / `172.31.255.0/24` | Dedicated egress network |
+| `SEC_TOOLBOX_EGRESS_DNS` | *(empty)* | Egress container `--dns` (`1.1.1.1` for VPN; empty = embedded resolver) |
+| `SEC_TOOLBOX_EGRESS_MTU` | *(empty)* | Egress network MTU (`1280` for VPN; empty = docker default 1500) |
+| `EXEC_RATE_PER_MIN` / `_BURST` | `30` / `10` | Token-bucket rate limit |
+| `EXEC_MAX_CONCURRENCY` / `EXEC_CONC_RETRY_AFTER` | `3` / `5` | Concurrency cap |
+| `EXEC_IP_RATE_PER_MIN` / `_BURST` | `0` (off) / `20` | Optional pre-auth per-IP rate |
+| `EGRESS_VPN` / `WG_IFACE` | `0` / `wg0` | Firewall VPN kill-switch (via `/etc/cyber-exec/egress.env`) |
+
+---
+
+## Troubleshooting / lessons learned
+
+Hard-won gotchas from building this on a live Kali/Tailscale/Docker box:
+
+- **`/work` mounts empty** → the workdir was under a systemd `PrivateTmp` `/tmp`
+  the Docker daemon can't see. Use `StateDirectory` / a host-visible `CYBER_EXEC_WORKROOT`.
+- **`testssl.sh: command not found`** → Kali's package installs the binary as
+  `testssl`; the Dockerfile symlinks it. (nikto/radare2 are Kali-only → Kali base.)
+- **Ghidra `analyzeHeadless` crashes in font code** → needs `libfreetype6
+  fontconfig libfontconfig1 libharfbuzz0b fonts-dejavu-core` (baked in the heavy image).
+- **nuclei has no templates offline** → they're git-cloned at build to
+  `$NUCLEI_TEMPLATES`; pass `-t $NUCLEI_TEMPLATES -disable-update-check`.
+- **heavy request errors `exit 125` re CPUs** → `--cpus` is clamped to the host
+  CPU count (docker refuses more CPUs than exist).
+- **`docker build` DNS breaks after enabling the firewall** → don't scope firewall
+  rules to `docker0`-wide; the egress network is dedicated and rules are
+  source-scoped to `172.31.255.0/24` only.
+- **MagicDNS still reachable from a container** → `100.100.100.100` is host-local;
+  FORWARD/`DOCKER-USER` never sees it (tailscale DNATs in nat PREROUTING). Drop it
+  in `raw/PREROUTING`.
+- **VPN: HTTPS hangs but HTTP works ("MTU black hole")** → the egress network MTU
+  was 1500; the TLS ClientHello (1452B, DF) exceeds the tunnel MTU and is dropped
+  in `ip_forward()` before FORWARD. **Root fix: egress network MTU 1280**
+  (`SEC_TOOLBOX_EGRESS_MTU`). Belt: bidirectional MSS clamp (`-i` **and** `-o wg0`,
+  `--tcp-flags SYN,RST SYN` not `--syn`), `rp_filter=2` (loose), MASQUERADE
+  `-I POSTROUTING 1 -o wg0`.
+- **VPN breaks Tailscale / SSH** → the WireGuard config took the default route. Use
+  `Table = 51820` + a source `ip rule` (never `Table = auto` with `0.0.0.0/0` in main).
+
+---
+
+## Repository layout
+
+| Path | Purpose |
+|------|---------|
+| `CLAUDE.md` | Quick-reference memory file |
+| `app/main.py` | FastAPI service (auth, throttling, exec, sweep) |
+| `app/run.sh` / `app/requirements.txt` | Loopback launcher / deps |
+| `docker/Dockerfile.sec-toolbox` | Lean default image (`sec-toolbox:latest`) |
+| `docker/Dockerfile.heavy` | Opt-in heavy image (`sec-toolbox-heavy:latest`) |
+| `deploy/cyber-exec.service` | Service systemd unit |
+| `deploy/egress-firewall.sh` + `.service` | Source-scoped egress firewall + boot re-apply |
+| `deploy/wg0.conf.example` | WireGuard template (no default-route takeover) |
+| `deploy/vpn-egress.sh` | iVPN egress lifecycle (install/dry-run/up/down/status) |
+| `scripts/smoke_test.sh` | Base end-to-end smoke |
+| `scripts/smoke_offensive.sh` | Offensive tooling smoke |
+| `scripts/smoke_heavy.sh` + `scripts/ghidra/DecompileFirst.py` | Heavy image smoke |
+| `scripts/smoke_vpn.sh` | VPN egress smoke |
+| `scripts/verify_egress.sh` | Post-change egress regression gate |
+| `.env.example` | Config template |
