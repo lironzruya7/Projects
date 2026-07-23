@@ -57,6 +57,10 @@ Update at each stop-point; add new entries at the top of History, don't rewrite.
   `/etc/wireguard/wg0.conf`).
 
 ## History (newest first)
+- **PLAYBOOK.md — ready-to-copy payloads appendix**: appended a copy-paste
+  JSON-payload appendix (curl wrapper + web recon/ffuf/port+SYN scan/TLS/static
+  malware triage/PDF+Office/Ghidra/Volatility3) to the OS-side playbook. Docs-only,
+  contract unchanged.
 - **Added `docs/PLAYBOOK.md`**: OS-side integration playbook — how to invoke the
   new capabilities (image/raw/network, offline nuclei, heavy recipes, VPN). Relay
   to the OS session; no VPS change needed (contract is backward-compatible).
