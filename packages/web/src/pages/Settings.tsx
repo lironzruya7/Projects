@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, type EmailTestResult } from '../api/client';
+import { api, type EmailTestResult, type NotifyConfigView } from '../api/client';
 import { Badge, Bidi, Button, Card, Spinner } from '../components/ui';
 import { formatDate, formatMoney } from '../lib/format';
 
@@ -117,6 +117,9 @@ export function Settings(): JSX.Element {
           </select>
         </label>
       </Card>
+
+      {/* Notifications */}
+      <NotifyCard onMsg={setMsg} />
 
       {/* Direct bank/card connection */}
       <DirectConnectCard />
@@ -611,5 +614,111 @@ function DedupForm({ value, onSave }: { value: any; onSave: (v: any) => void }):
       </div>
       <Button variant="subtle" className="mt-3" onClick={() => onSave(v)}>Save & rebuild</Button>
     </div>
+  );
+}
+
+/** Push notifications (weekly digest + alerts). Off by default; privacy-conscious. */
+function NotifyCard({ onMsg }: { onMsg: (m: string) => void }): JSX.Element {
+  const [cfg, setCfg] = useState<NotifyConfigView | null>(null);
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  useEffect(() => {
+    void api.notifySettings().then(setCfg);
+  }, []);
+
+  if (!cfg) return <Card><Spinner label="Loading notifications…" /></Card>;
+
+  const save = async (patch: Partial<NotifyConfigView>): Promise<void> => {
+    const next = { ...cfg, ...patch };
+    setCfg(next);
+    const saved = await api.saveNotify({
+      enabled: next.enabled,
+      channel: next.channel,
+      url: next.url,
+      telegramBotToken: token, // blank => server keeps existing
+      telegramChatId: next.telegramChatId,
+      includeAmounts: next.includeAmounts,
+    });
+    setCfg(saved);
+    setToken('');
+  };
+
+  const test = async (): Promise<void> => {
+    setBusy(true); setResult(null);
+    try {
+      await save({}); // persist current fields first
+      const r = await api.notifyTest();
+      setResult(r.ok ? 'Test sent ✓' : `Failed: ${r.detail ?? r.status}`);
+    } finally { setBusy(false); }
+  };
+  const digest = async (): Promise<void> => {
+    setBusy(true); setResult(null);
+    try {
+      const r = await api.notifyDigest();
+      setResult(r.ok ? 'Digest sent ✓' : `Not sent: ${r.detail}`);
+      onMsg(r.preview);
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="font-medium">🔔 Notifications</h3>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={cfg.enabled} onChange={(e) => save({ enabled: e.target.checked })} />
+          enabled
+        </label>
+      </div>
+      <p className="text-xs text-muted mb-3">
+        Weekly spending digest + alerts, sent by a plain HTTPS POST. <b>Recommended: a self-hosted
+        ntfy on your tailnet</b> so financial data stays private. ntfy.sh (public) and Telegram are
+        cloud services — only use them if you accept sending data there.
+      </p>
+
+      <div className="space-y-2">
+        <label className="block">
+          <span className="text-xs text-muted">Channel</span>
+          <select className="input" value={cfg.channel} onChange={(e) => save({ channel: e.target.value as NotifyConfigView['channel'] })}>
+            <option value="ntfy">ntfy (recommended, self-host)</option>
+            <option value="telegram">Telegram bot</option>
+            <option value="webhook">Generic webhook</option>
+          </select>
+        </label>
+
+        {cfg.channel !== 'telegram' && (
+          <label className="block">
+            <span className="text-xs text-muted">{cfg.channel === 'ntfy' ? 'ntfy topic URL' : 'Webhook URL'}</span>
+            <input className="input" placeholder="https://ntfy.your-tailnet/finance" value={cfg.url} onChange={(e) => setCfg({ ...cfg, url: e.target.value })} onBlur={() => save({})} />
+          </label>
+        )}
+
+        {cfg.channel === 'telegram' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <label className="block">
+              <span className="text-xs text-muted">Bot token {cfg.telegramTokenSet && <span className="text-emerald-400">· set</span>}</span>
+              <input className="input" type="password" placeholder={cfg.telegramTokenSet ? '•••••• (unchanged)' : '123456:ABC…'} value={token} onChange={(e) => setToken(e.target.value)} onBlur={() => save({})} />
+            </label>
+            <label className="block">
+              <span className="text-xs text-muted">Chat ID</span>
+              <input className="input" placeholder="123456789" value={cfg.telegramChatId} onChange={(e) => setCfg({ ...cfg, telegramChatId: e.target.value })} onBlur={() => save({})} />
+            </label>
+          </div>
+        )}
+
+        <label className="flex items-center gap-2 text-sm mt-1">
+          <input type="checkbox" checked={cfg.includeAmounts} onChange={(e) => save({ includeAmounts: e.target.checked })} />
+          <span>Include amounts in messages <span className="text-muted text-xs">(off = counts/labels only)</span></span>
+        </label>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mt-3">
+        <Button variant="ghost" disabled={busy} onClick={test}>Send test</Button>
+        <Button variant="subtle" disabled={busy} onClick={digest}>Send digest now</Button>
+        {result && <span className="text-sm self-center text-muted">{result}</span>}
+      </div>
+      <p className="text-[10px] text-muted mt-2">Tip: schedule the weekly digest with a cron/pm2 job that POSTs <code>/api/notify/digest</code>.</p>
+    </Card>
   );
 }

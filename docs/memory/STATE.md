@@ -62,8 +62,10 @@ curl -s -H "Authorization: Bearer $FINANCE_READ_TOKEN" \
 - ✅ Batch 2: curated Israeli merchant seed rules (out-of-the-box categorization).
 - ✅ Batch 3: Monte Carlo forecast bands, upcoming-bills cashflow calendar, category budgets.
   (Savings goals deferred — small follow-up.)
-- ⏸ Batch 4 (needs owner approval + safety review before pulling any dep): ntfy/Telegram push,
-  sqlite-vec embeddings, sharp/OCR upgrade, Ollama/vision-LLM, NL "ask your money".
+- ▶ Batch 4: ✅ Push notifications (ntfy/Telegram/webhook — NO npm dep, HTTPS POST only, off by
+  default, privacy-conscious; Settings UI + /api/notify/{settings,test,digest}). ⏸ Remaining
+  items need owner approval + the safety review (see docs/BATCH4-DEPENDENCIES.md) before pulling
+  any dep: sqlite-vec embeddings, sharp/OCR upgrade, Ollama/vision-LLM, NL "ask your money".
 
 ## History (append newest first)
 - **2026-07-23** — Roadmap batches 1–2 shipped: Safe-to-Spend, subscription price-hike/trial

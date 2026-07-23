@@ -88,6 +88,7 @@ function seed(db: Database.Database): void {
       lookbackDays: 90,
     },
     anomaly: { newMerchantWindowDays: 60, spikeMultiplier: 2.5 },
+    notify: { enabled: false, channel: 'ntfy', url: '', telegramBotToken: '', telegramChatId: '', includeAmounts: true },
   };
   const getSettingStmt = db.prepare(`SELECT value FROM settings WHERE key = ?`);
   const putSetting = db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)`);

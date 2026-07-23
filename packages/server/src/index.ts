@@ -19,6 +19,7 @@ import { settingsRoutes } from './routes/settings.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { scrapeRoutes } from './routes/scrape.js';
 import { agentExportRoutes } from './routes/agentExport.js';
+import { notifyRoutes } from './routes/notify.js';
 
 async function main(): Promise<void> {
   // Safety net: some libraries (tesseract.js OCR) can throw asynchronously from
@@ -64,6 +65,7 @@ async function main(): Promise<void> {
   await app.register(attachmentRoutes);
   await app.register(scrapeRoutes);
   await app.register(agentExportRoutes);
+  await app.register(notifyRoutes);
 
   // Production: serve the built frontend from this same origin, so there is a
   // single port to expose (e.g. over Tailscale). Falls back to index.html for

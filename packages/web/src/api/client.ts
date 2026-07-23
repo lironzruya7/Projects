@@ -134,6 +134,16 @@ export interface RecurringItem {
   isNew: boolean;
 }
 
+export interface NotifyConfigInput {
+  enabled: boolean;
+  channel: 'ntfy' | 'telegram' | 'webhook';
+  url: string;
+  telegramBotToken: string;
+  telegramChatId: string;
+  includeAmounts: boolean;
+}
+export type NotifyConfigView = Omit<NotifyConfigInput, 'telegramBotToken'> & { telegramTokenSet: boolean };
+
 export interface UpcomingBill {
   date: string;
   merchant: string;
@@ -391,6 +401,10 @@ export const api = {
   },
   recurring: () => req<{ recurring: RecurringItem[] }>('/api/insights/recurring'),
   upcoming: () => req<UpcomingReport>('/api/insights/upcoming'),
+  notifySettings: () => req<NotifyConfigView>('/api/notify/settings'),
+  saveNotify: (cfg: NotifyConfigInput) => req<NotifyConfigView>('/api/notify/settings', { method: 'PUT', body: JSON.stringify(cfg) }),
+  notifyTest: () => req<{ ok: boolean; status?: number; detail?: string }>('/api/notify/test', { method: 'POST' }),
+  notifyDigest: () => req<{ ok: boolean; detail?: string; preview: string }>('/api/notify/digest', { method: 'POST' }),
   budgets: () => req<BudgetsReport>('/api/budgets'),
   setBudget: (category: string, limit: number) =>
     req<BudgetsReport>(`/api/budgets/${encodeURIComponent(category)}`, { method: 'PUT', body: JSON.stringify({ limit }) }),
