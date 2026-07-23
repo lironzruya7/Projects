@@ -155,7 +155,23 @@ export function Insights(): JSX.Element {
                 >
                   <span className="w-1.5 h-10 rounded-full shrink-0" style={{ background: color }} />
                   <div className="flex-1 min-w-0">
-                    <Bidi className="font-medium truncate block">{r.merchant}</Bidi>
+                    <div className="flex items-center gap-2">
+                      <Bidi className="font-medium truncate">{r.merchant}</Bidi>
+                      {r.priceChangePct != null && (
+                        <span
+                          className="text-[10px] rounded-full px-1.5 py-0.5 font-semibold shrink-0"
+                          style={{ color: r.priceChangePct > 0 ? 'var(--expense)' : 'var(--income)', border: `1px solid ${r.priceChangePct > 0 ? 'var(--expense)' : 'var(--income)'}` }}
+                          title={`was ${formatMoney(r.avgAmount, r.currency)}, now ${formatMoney(r.currentAmount, r.currency)}`}
+                        >
+                          {r.priceChangePct > 0 ? '↑' : '↓'} {Math.abs(r.priceChangePct)}%
+                        </span>
+                      )}
+                      {r.isNew && (
+                        <span className="text-[10px] rounded-full px-1.5 py-0.5 font-medium shrink-0" style={{ color: 'var(--warning)', border: '1px solid var(--warning)' }} title="First charge is recent — could be a converted free trial">
+                          new
+                        </span>
+                      )}
+                    </div>
                     <div className="text-xs text-muted mt-0.5 flex items-center gap-2 flex-wrap">
                       <span>every {r.intervalDays}d</span>
                       <span>· next {formatDate(r.nextExpected)}</span>

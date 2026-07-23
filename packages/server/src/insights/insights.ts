@@ -100,6 +100,10 @@ export interface Forecast {
   expectedRemaining: { spend: number; income: number };
   projectedNet: number; // projected income − spend for the whole month
   projectedEndBalance: number | null; // current balance + projected remaining net
+  daysLeftInMonth: number;
+  remainingBills: number; // known recurring charges still due before month-end
+  safeToSpendTotal: number; // discretionary money left for the rest of the month
+  safeToSpendPerDay: number; // that, divided across the remaining days
 }
 
 /**
@@ -135,6 +139,21 @@ export function buildForecast(base: string): Forecast {
   const asOf = hasBalance ? balances.map((b) => b.asOf).sort().at(-1) ?? null : null;
   const projectedEndBalance = currentBalance != null ? currentBalance + restIncome - restSpend : null;
 
+  // Safe-to-Spend: of the income we still expect this month, how much is left for
+  // discretionary spend after what's already been spent and the known bills still
+  // due — spread across the days remaining. One number that answers "can I spend?".
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysLeftInMonth = Math.max(1, daysInMonth - now.getDate() + 1);
+  const todayIso = now.toISOString().slice(0, 10);
+  const monthEndIso = `${month}-${String(daysInMonth).padStart(2, '0')}`;
+  const remainingBills = detectRecurring()
+    .filter((r) => r.currency === base && r.nextExpected >= todayIso && r.nextExpected <= monthEndIso)
+    .reduce((s, r) => s + r.currentAmount, 0);
+  const expectedMonthIncome = mtdIncome + restIncome;
+  const safeToSpendTotal = expectedMonthIncome - mtdSpend - remainingBills;
+  const safeToSpendPerDay = Math.max(0, safeToSpendTotal) / daysLeftInMonth;
+
   return {
     currency: base,
     month,
@@ -146,6 +165,10 @@ export function buildForecast(base: string): Forecast {
     expectedRemaining: { spend: round2(restSpend), income: round2(restIncome) },
     projectedNet: round2(projectedNet),
     projectedEndBalance: projectedEndBalance != null ? round2(projectedEndBalance) : null,
+    daysLeftInMonth,
+    remainingBills: round2(remainingBills),
+    safeToSpendTotal: round2(safeToSpendTotal),
+    safeToSpendPerDay: round2(safeToSpendPerDay),
   };
 }
 
@@ -296,6 +319,9 @@ export interface RecurringItem {
   nextExpected: string;
   monthlyCost: number;
   annualCost: number;
+  currentAmount: number; // the most recent charge (what you'll pay next)
+  priceChangePct: number | null; // latest vs the prior stable price; null if no meaningful change
+  isNew: boolean; // first charge landed within ~45 days — possibly a converted free trial
 }
 
 /** Detect charges that repeat on a monthly-ish cadence with similar amounts. */
@@ -328,12 +354,26 @@ export function detectRecurring(): RecurringItem[] {
 
     const amounts = sorted.map(mag);
     const avgAmount = amounts.reduce((s, a) => s + a, 0) / amounts.length;
-    const amountStable = amounts.every((a) => Math.abs(a - avgAmount) <= Math.max(2, avgAmount * 0.2));
-    if (!amountStable) continue;
+    // Require the HISTORICAL amounts (all but the latest) to be stable so this is
+    // a genuine fixed subscription — but ALLOW the most recent charge to deviate,
+    // so a price hike is caught instead of disqualifying the whole subscription.
+    const prior = amounts.slice(0, -1);
+    const priorAvg = prior.reduce((s, a) => s + a, 0) / prior.length;
+    const priorStable = prior.every((a) => Math.abs(a - priorAvg) <= Math.max(2, priorAvg * 0.2));
+    if (!priorStable) continue;
 
     const last = sorted[sorted.length - 1]!;
+    const currentAmount = mag(last);
+    // Price change of the latest charge vs the prior stable price.
+    const rawPct = priorAvg > 0 ? ((currentAmount - priorAvg) / priorAvg) * 100 : 0;
+    const priceChangePct =
+      Math.abs(currentAmount - priorAvg) >= 2 && Math.abs(rawPct) >= 10 ? Math.round(rawPct) : null;
+    // First charge within ~45 days => possibly a just-converted free trial.
+    const firstAgeDays = (Date.now() - Date.parse(sorted[0]!.date)) / MS_DAY;
+    const isNew = firstAgeDays <= 45;
+
     const nextMs = Date.parse(last.date) + avgGap * MS_DAY;
-    const monthlyCost = avgAmount * (30.44 / avgGap);
+    const monthlyCost = currentAmount * (30.44 / avgGap); // forward-looking: use the current price
     items.push({
       merchant,
       category: last.category,
@@ -345,6 +385,9 @@ export function detectRecurring(): RecurringItem[] {
       nextExpected: new Date(nextMs).toISOString().slice(0, 10),
       monthlyCost,
       annualCost: monthlyCost * 12,
+      currentAmount,
+      priceChangePct,
+      isNew,
     });
   }
   return items.sort((a, b) => b.monthlyCost - a.monthlyCost);

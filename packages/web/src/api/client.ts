@@ -104,6 +104,10 @@ export interface Forecast {
   expectedRemaining: { spend: number; income: number };
   projectedNet: number;
   projectedEndBalance: number | null;
+  daysLeftInMonth: number;
+  remainingBills: number;
+  safeToSpendTotal: number;
+  safeToSpendPerDay: number;
 }
 
 export interface Account {
@@ -124,6 +128,9 @@ export interface RecurringItem {
   nextExpected: string;
   monthlyCost: number;
   annualCost: number;
+  currentAmount: number;
+  priceChangePct: number | null;
+  isNew: boolean;
 }
 
 export interface Anomaly {

@@ -431,6 +431,23 @@ function ForecastCard({ f, nav }: { f: Forecast; nav: (to: string) => void }): J
         </div>
       )}
 
+      {/* Safe-to-Spend — the "can I spend right now?" number */}
+      <div className="mt-3 pt-3 border-t border-edge">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <div className="text-[11px] text-muted uppercase tracking-wide">Safe to spend / day</div>
+            <div className={`tnum text-2xl font-semibold leading-tight ${f.safeToSpendPerDay > 0 ? 'text-ink' : 'text-expense'}`}>
+              {formatMoney(f.safeToSpendPerDay, cur)}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[11px] text-muted uppercase tracking-wide">Left this month</div>
+            <div className="tnum text-sm font-semibold">{formatMoney(Math.max(0, f.safeToSpendTotal), cur)}</div>
+            <div className="text-[10px] text-muted">{f.daysLeftInMonth} days left · {formatMoney(f.remainingBills, cur)} bills due</div>
+          </div>
+        </div>
+      </div>
+
       {/* Transparent breakdown behind the estimate */}
       <div className="mt-3 pt-3 border-t border-edge grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <Metric label="Spent so far" value={formatMoney(f.monthToDate.spend, cur)} tone="expense" />
