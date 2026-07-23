@@ -21,13 +21,13 @@ _Last updated: 2026-07-23_
   budgets, debts, history`.
 
 ## Open items (owner decisions / follow-ups)
-- **🔴 PUBLIC EXPOSURE — remediation pending on the VPS.** Owner has been reaching the app via
-  the **Hostinger public IP** (prod `HOST=0.0.0.0`, port 4000 open to the internet) — financial
-  PII exposed. Fix (owner runs on VPS, in order): (1) `ufw` allow SSH, allow port 4000 only on
-  `tailscale0`, deny public 4000; (2) `tailscale serve --bg 4000` for HTTPS over the tailnet;
-  (3) deploy (code now binds `127.0.0.1` by default); (4) **rotate `FINANCE_READ_TOKEN`** (treat
-  as leaked) + update the OS `finance_report` config; (5) verify public `IP:4000` is dead and
-  the `.ts.net` URL works. Access method going forward: **`tailscale serve` only.**
+- **✅ Public exposure CLOSED (2026-07-23).** Was reachable on the Hostinger public IP
+  (`187.124.10.239:4000`). Owner ran: firewall (allow 4000 only on `tailscale0`, deny public) +
+  `tailscale serve` + deploy (now binds `127.0.0.1`). Verified from a phone on cellular (off the
+  tailnet): public `IP:4000` no longer loads. Access is now **`tailscale serve` only**.
+  - **CONFIRM STILL OPEN:** (a) `FINANCE_READ_TOKEN` **rotated**? It was reachable while the port
+    was public — treat as leaked; rotate on the box + update the OS `finance_report` config.
+    (b) tailnet access to `https://srv1814608.tail7d0828.ts.net` confirmed working.
 - **xlsx fix source.** Using `@e965/xlsx@0.20.3` (npm-native patched SheetJS) instead of the
   official CDN 0.20.x (CDN is policy-blocked in the dev env; npm-native is deploy-reliable).
   Owner may prefer the official CDN tarball — swap is one line if so.
