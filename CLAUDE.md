@@ -1,3 +1,23 @@
+> # ⚠️ ARCHIVE — this repo is a stale copy. The live one is `lironzruya7/analysis-vps`.
+>
+> Established 2026-07-27 by comparing the two clones, not by assumption:
+>
+> * **Same project.** Identical root commit (`3a9751d`) and identical `app/main.py`.
+> * **`analysis-vps` is 12 commits ahead**, and those commits are the substance:
+>   the toolbox expansion, the supply-chain pinning of `go install` tags, the
+>   Volatility3 offline symbol seeding, and the egress-firewall fix that restored
+>   isolation after a reboot.
+> * **This repo has exactly one commit the other lacks** — `e1e53ba`, the
+>   PLAYBOOK JSON-payload appendix — and **that content is already present in
+>   `analysis-vps`**. Nothing here is unique.
+> * The two copies had already **diverged in deploy code**
+>   (`deploy/egress-firewall.sh` differs), which is the dangerous failure: fixing
+>   a live bug in the copy nobody deploys.
+>
+> **Do not develop here.** Work on `lironzruya7/analysis-vps`. This clone is kept
+> only until the owner decides to archive or delete it on GitHub — that is his
+> call, not a session's.
+
 # CLAUDE.md — Analysis-VPS Cyber Agent operating brief (read first)
 
 You own the **analysis-VPS repo**: the `/api/exec` exec service, the toolbox
@@ -6,13 +26,27 @@ the **live state** (what's deployed, HEAD, open items, rollback) is in
 `docs/memory/STATE.md` — read it before acting.
 
 ## Role & boundaries
-- You own **ONLY** this repo. You do **NOT** touch other repos — **Claude OS**
-  (the brain that calls you), the **finance** webapp, the **poker** repo — they
-  belong to other sessions.
-- Work arrives as **specs relayed by the owner** from the OS session. Implement
-  here, smoke live, report back.
-- If a spec would weaken the security model, **push back to the owner** instead
-  of implementing it. Isolation is not negotiable for convenience.
+
+**Correction, 2026-07-27 (owner):** there are no parallel sessions. **One hub
+session owns every repo** — this one, Claude OS, the finance webapp, the poker
+repo — and takes its instructions directly from the owner. Any subagent working
+here was spawned by that hub. The text this replaced said the other repos
+"belong to other sessions"; it was wrong and would have made a session refuse
+work that is in fact its own.
+
+What that changes, and what it does NOT:
+- **Ownership is one.** Work does not arrive "relayed from the OS session"; it
+  arrives from the owner, or from the hub's own plan.
+- **The isolation stays exactly as it was.** It was never about who owns the
+  repo — it is about what this BOX may reach. This VPS is assume-compromised and
+  Tailscale-ACL-isolated; it cannot initiate to the OS, finance, poker or the
+  phone, and that is a property of the network and the firewall, not of session
+  boundaries. Owning both sides is not a reason to relax either.
+- **Cross-repo edits still need care.** A change here that assumes something
+  about the OS's caller is still a contract change: state it, and update the
+  other side deliberately rather than by memory.
+- If an instruction would weaken the security model, **push back to the owner**
+  instead of implementing it. Isolation is not negotiable for convenience.
 
 ## What this box is
 A dedicated, **disposable, ACL-isolated Kali VPS**. Treat it as
